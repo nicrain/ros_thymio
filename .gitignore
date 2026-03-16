@@ -1,0 +1,32 @@
+# Colcon / ROS2 workspace artifacts
+build/
+install/
+log/
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+*.bak
+
+# VS Code
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# ROS
+*.log
+
+# Ignore ROS2 local setup markers
+**/local_setup.*
+
+# Ignore generated URDFs
+**/test.urdf
