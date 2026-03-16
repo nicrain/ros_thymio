@@ -67,6 +67,11 @@ https://jeguzzi.github.io/ros-aseba/installation.html#
 
 > If you are using a different ROS 2 distribution (e.g. Humble), replace `kilted` with your ROS distribution name.
 
+This repository includes a small source patch applied to the `ros-aseba` code to ensure it builds cleanly on current toolchains:
+
+- `aseba/common/msg/TargetDescription.h`: added `#include <cstdint>`
+
+
 #### (Optional) Python virtual environment
 
 This repo includes a `.venv/` folder, but you can recreate it with:
@@ -117,6 +122,7 @@ python3 thymio_tobii/thymio_ros.py
 ```
 
 (Adjust the command if you run it inside a virtualenv or if you need a ROS2 launch wrapper.)
+
 
 ## Repository layout
 
