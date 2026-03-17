@@ -20,6 +20,7 @@
 import argparse
 import json
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -252,8 +253,6 @@ def publish_gaze_cmd_vel(udp_port=5005):
 
 def attach_thymio_usb(busid):
     """通过 usbipd.exe 将 Windows 侧的 Thymio 连接到 WSL"""
-    import shutil
-    
     cmd = shutil.which("usbipd.exe")
     if not cmd:
         print("Erreur : usbipd.exe introuvable.")
@@ -304,7 +303,6 @@ def main():
     # 步骤 0：可选的自动分配 USB
     if args.busid:
         attach_thymio_usb(args.busid)
-
 
     # 检查 ros2 命令是否在 PATH 中（未 source setup.bash 时会缺失）
     if not shutil.which('ros2'):
@@ -383,6 +381,4 @@ def main():
 
 
 if __name__ == '__main__':
-    import shutil  # 仅在直接运行时导入（用于检查 ros2 是否在 PATH 中）
-
     main()
