@@ -260,10 +260,13 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
                         pass  # twist 保持默认零值，机器人停止
                     else:
                         # y=0（看屏幕最上方）→ 最大速度 0.2；y=1（看最下方）→ 停止
-                        twist.linear.x = 0.2 * max(0.0, 1.0 - y)
-                        # Python 中 bool 可参与运算（True=1, False=0）：
-                        # 左在线右不在 → +0.8（左转）；右在线左不在 → -0.8（右转）；都在 → 0（直行）
-                        twist.angular.z = 0.8 * (left_on - right_on)
+                        base_speed = 0.2 * max(0.0, 1.0 - y)
+                        correction = left_on - right_on  # -1、0 或 +1
+
+                        # 转向时减速：修正时前进速度降为一半，避免过冲后震荡
+                        twist.linear.x  = base_speed * (1.0 - 0.5 * abs(correction))
+                        # 修正增益降为 0.4（原 0.8），减小每次修正幅度
+                        twist.angular.z = 0.4 * correction
                 else:
                     # --- 普通视线控制模式 ---
                     if y > 0.8:
