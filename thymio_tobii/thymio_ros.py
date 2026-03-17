@@ -253,6 +253,26 @@ def publish_gaze_cmd_vel(udp_port=5005):
             pass
 
 
+def attach_thymio_usb(busid):
+    """通过 usbipd.exe 将 Windows 侧的 Thymio 连接到 WSL"""
+    import shutil
+    
+    cmd = shutil.which("usbipd.exe")
+    if not cmd:
+        print("Erreur : usbipd.exe introuvable.")
+        return False
+    
+    try:
+        print(f"Tentative d'attachement USB (BusID: {busid}) via usbipd...")
+        subprocess.run([cmd, "attach", "--wsl", "--busid", busid], check=True)
+        print("USB attaché avec succès. Attente de 1.5s pour l'énumération...")
+        time.sleep(1.5)  # 等待 Linux 识别并生成 /dev/ttyACM0
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Échec de l'attachement USB (code: {e.returncode}). Le périphérique est peut-être déjà attaché.")
+        return False
+
+
 def main():
     """程序入口：解析参数，启动驱动，等待就绪，按模式执行控制逻辑。"""
     parser = argparse.ArgumentParser(
@@ -278,7 +298,16 @@ def main():
         '--timeout', type=float, default=30.0,
         help='等待 /cmd_vel 订阅者出现的最大秒数（默认 30 秒）',
     )
+    parser.add_argument(
+        '--busid', type=str, default='1-1',
+        help='Windows 下 Thymio 的 USB Bus ID (例如 1-1)，用于自动 attach，为空则跳过',
+    )
     args = parser.parse_args()
+
+    # 步骤 0：可选的自动分配 USB
+    if args.busid:
+        attach_thymio_usb(args.busid)
+
 
     # 检查 ros2 命令是否在 PATH 中（未 source setup.bash 时会缺失）
     if not shutil.which('ros2'):
