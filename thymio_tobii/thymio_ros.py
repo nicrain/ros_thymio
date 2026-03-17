@@ -195,57 +195,54 @@ def publish_gaze_cmd_vel(udp_port=5005):
     sock.setblocking(False)            # 非阻塞：无数据时立即抛出异常而非阻塞等待
 
     node.get_logger().info(f'Écoute UDP {udp_port}, publication des données gaze sur /cmd_vel')
-    last_msg = time.time()  # 记录最后一次成功收到视线数据的时间戳
+    last_msg = [time.time()]  # 用列表包装，方便在定时器回调中修改, 记录最后一次成功收到视线数据的时间戳
+
+    def timer_callback():
+        # --- 清空 UDP 队列，只保留最新一帧视线数据 ---
+        latest = None
+        while True:
+            try:
+                data, _ = sock.recvfrom(1024) # 每个 UDP 包最大 1024 字节
+                latest = data                   # 覆盖旧值，始终保留最新包
+            except (BlockingIOError, socket.error):
+                break  # 队列已空，退出内层循环
+
+        # --- 解析视线数据并发布速度指令 ---
+        if latest is not None:
+            try:
+                val = json.loads(latest.decode())
+                x = float(val.get('x', 0.5))  # 水平位置：0=最左，1=最右，默认居中
+                y = float(val.get('y', 0.5))  # 垂直位置：0=最上，1=最下，默认居中
+                last_msg[0] = time.time()         # 更新最后收到消息的时间戳
+
+                twist = Twist()
+                if y > 0.8:
+                    twist.linear.x = -0.15
+                elif x < 0.3:
+                    twist.linear.x = 0.1
+                    twist.angular.z = 1.2
+                elif x > 0.7:
+                    twist.linear.x = 0.1
+                    twist.angular.z = -1.2
+                else:
+                    twist.linear.x = 0.2
+
+                pub.publish(twist)
+            except Exception:
+                pass  # 忽略单帧解析错误，继续处理下一帧
+
+        # --- 看门狗：视线数据中断时令机器人停止 ---
+        if time.time() - last_msg[0] > 0.5:
+            # 超过 0.5 秒无数据（眼动仪断开或信号丢失），发送零速度保证安全
+            pub.publish(Twist())
+
+    # 创建定时器，0.05 秒执行一次回调（即 20 Hz）
+    node.create_timer(0.05, timer_callback)
 
     try:
-        while rclpy.ok():
-            # --- 清空 UDP 队列，只保留最新一帧视线数据 ---
-            # 眼动仪发送频率很高，每次循环将积压的包全部读出，丢弃过时帧
-            latest = None
-            while True:
-                try:
-                    data, _ = sock.recvfrom(1024)  # 每个 UDP 包最大 1024 字节
-                    latest = data                   # 覆盖旧值，始终保留最新包
-                except (BlockingIOError, socket.error):
-                    break  # 队列已空，退出内层循环
-
-            # --- 解析视线数据并发布速度指令 ---
-            if latest is not None:
-                try:
-                    # UDP 包为 JSON 格式，如 {"x": 0.42, "y": 0.31}
-                    val = json.loads(latest.decode())
-                    x = float(val.get('x', 0.5))  # 水平位置：0=最左，1=最右，默认居中
-                    y = float(val.get('y', 0.5))  # 垂直位置：0=最上，1=最下，默认居中
-                    last_msg = time.time()         # 更新最后收到消息的时间戳
-
-                    twist = Twist()
-                    if y > 0.8:
-                        # 视线在屏幕下方 → 后退
-                        twist.linear.x = -0.15
-                    elif x < 0.3:
-                        # 视线在屏幕左侧 → 前进同时向左旋转（angular.z 正值=逆时针）
-                        twist.linear.x = 0.1
-                        twist.angular.z = 1.2
-                    elif x > 0.7:
-                        # 视线在屏幕右侧 → 前进同时向右旋转（angular.z 负值=顺时针）
-                        twist.linear.x = 0.1
-                        twist.angular.z = -1.2
-                    else:
-                        # 视线在屏幕中央 → 全速直线前进
-                        twist.linear.x = 0.2
-
-                    pub.publish(twist)
-                except Exception:
-                    pass  # 忽略单帧解析错误，继续处理下一帧
-
-            # --- 看门狗：视线数据中断时令机器人停止 ---
-            if time.time() - last_msg > 0.5:
-                # 超过 0.5 秒无数据（眼动仪断开或信号丢失），发送零速度保证安全
-                pub.publish(Twist())
-
-            time.sleep(0.05)  # 控制主循环频率约 20 Hz，避免 CPU 空转
+        # 使用 spin 自动处理定时器和所有回调
+        rclpy.spin(node)
     finally:
-        # 程序退出（含 Ctrl+C）时清理 ROS 2 资源
         node.destroy_node()
         try:
             rclpy.shutdown()
