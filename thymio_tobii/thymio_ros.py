@@ -255,11 +255,9 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
                     # 地面传感器差分修正：哪侧在线上就向那侧转
                     left_on  = on_line(ground['left'])
                     right_on = on_line(ground['right'])
-                    if left_on and not right_on:
-                        twist.angular.z = 0.8   # 左侧在线，向左修正（逆时针）
-                    elif right_on and not left_on:
-                        twist.angular.z = -0.8  # 右侧在线，向右修正（顺时针）
-                    # 两侧都在线（线较宽）或都不在线 → 直行，不修正方向
+                    # Python 中 bool 可参与运算（True=1, False=0）：
+                    # 左在线右不在 → +0.8（左转）；右在线左不在 → -0.8（右转）；相同 → 0（直行）
+                    twist.angular.z = 0.8 * (left_on - right_on)
                 else:
                     # --- 普通视线控制模式 ---
                     if y > 0.8:
