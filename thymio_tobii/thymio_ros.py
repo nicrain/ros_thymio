@@ -208,15 +208,19 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
     # --- 循线模式：订阅地面传感器并设置阈值 ---
     ground = {'left': 0.5, 'right': 0.5}  # 地面传感器当前读数（反射强度，0.0~1.0）
     if line_mode == 'blackline':
-        # 黑线反射弱，读数小；低于阈值即认为在线上
-        GROUND_THRESHOLD = 0.3
-        on_line = lambda v: v < GROUND_THRESHOLD
-        node.get_logger().info(f'Mode suivi de ligne: NOIRE (seuil < {GROUND_THRESHOLD})')
-    elif line_mode == 'whiteline':
-        # 白线反射强，读数大；高于阈值即认为在线上
-        GROUND_THRESHOLD = 0.7
+        # 黑线吸收红外光，反射极弱 → range=1（未检测到反射）
+        # 普通地面有反射 → range=0（检测到反射）
+        # 因此 range > 0.5 表示在黑线上
+        GROUND_THRESHOLD = 0.5
         on_line = lambda v: v > GROUND_THRESHOLD
-        node.get_logger().info(f'Mode suivi de ligne: BLANCHE (seuil > {GROUND_THRESHOLD})')
+        node.get_logger().info(f'Mode suivi de ligne: NOIRE (seuil > {GROUND_THRESHOLD})')
+    elif line_mode == 'whiteline':
+        # 白线反射红外光强 → range=0（检测到强反射）
+        # 深色背景几乎不反射 → range=1（无反射）
+        # 因此 range < 0.5 表示在白线上
+        GROUND_THRESHOLD = 0.5
+        on_line = lambda v: v < GROUND_THRESHOLD
+        node.get_logger().info(f'Mode suivi de ligne: BLANCHE (seuil < {GROUND_THRESHOLD})')
     else:
         GROUND_THRESHOLD = 0.5  # 普通模式下不使用，仅占位
         on_line = lambda v: False
@@ -248,16 +252,18 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
                 twist = Twist()
                 if line_mode is not None:
                     # --- 循线模式：视线 y 线性控制速度，地面传感器控制方向 ---
-                    # y=0（看屏幕最上方）→ 最大速度 0.2；y=1（看最下方）→ 停止
-                    speed = 0.2 * max(0.0, 1.0 - y)
-                    twist.linear.x = speed
-
-                    # 地面传感器差分修正：哪侧在线上就向那侧转
                     left_on  = on_line(ground['left'])
                     right_on = on_line(ground['right'])
-                    # Python 中 bool 可参与运算（True=1, False=0）：
-                    # 左在线右不在 → +0.8（左转）；右在线左不在 → -0.8（右转）；相同 → 0（直行）
-                    twist.angular.z = 0.8 * (left_on - right_on)
+
+                    if not left_on and not right_on:
+                        # 两侧都未检测到线 → 停止（丢线保护，防止乱走）
+                        pass  # twist 保持默认零值，机器人停止
+                    else:
+                        # y=0（看屏幕最上方）→ 最大速度 0.2；y=1（看最下方）→ 停止
+                        twist.linear.x = 0.2 * max(0.0, 1.0 - y)
+                        # Python 中 bool 可参与运算（True=1, False=0）：
+                        # 左在线右不在 → +0.8（左转）；右在线左不在 → -0.8（右转）；都在 → 0（直行）
+                        twist.angular.z = 0.8 * (left_on - right_on)
                 else:
                     # --- 普通视线控制模式 ---
                     if y > 0.8:
