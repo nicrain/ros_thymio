@@ -29,7 +29,8 @@ import time
 import threading
 
 import rclpy
-from geometry_msgs.msg import Twist  # ROS 2 标准速度消息类型（线速度 + 角速度）
+from geometry_msgs.msg import Twist   # ROS 2 标准速度消息类型（线速度 + 角速度）
+from sensor_msgs.msg import Range     # 距离/反射强度消息类型（地面传感器）
 
 
 def run_cmd(cmd, **kwargs):
@@ -172,19 +173,25 @@ def publish_test_cmd_vel():
             pass
 
 
-def publish_gaze_cmd_vel(udp_port=5005):
+def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
     """视线控制模式（核心控制循环）：接收 UDP 视线数据，实时转换为机器人运动指令。
 
-    视线坐标映射规则（x、y 均为 0.0~1.0，代表屏幕相对位置）：
+    普通模式（line_mode=None）的视线映射规则（x、y 均为 0.0~1.0）：
         - y > 0.8（视线在屏幕下方）  → 后退
         - x < 0.3（视线在屏幕左侧）  → 左转（前进 + 逆时针旋转）
         - x > 0.7（视线在屏幕右侧）  → 右转（前进 + 顺时针旋转）
         - 其余（视线在屏幕中央）      → 直线前进
 
+    循线模式（line_mode='blackline'/'whiteline'）：
+        - 地面传感器自动控制左右转向（循线）
+        - 视线 y 线性控制速度：y=0（最上）→ 最大速度，y=1（最下）→ 停止，无后退
+        - 视线 x 忽略（方向由传感器决定）
+
     安全机制：若超过 0.5 秒未收到视线数据，发送零速度令机器人停止。
 
     Args:
-        udp_port: 监听视线 UDP 数据包的端口，默认 5005
+        udp_port:  监听视线 UDP 数据包的端口，默认 5005
+        line_mode: 循线模式，'blackline'=追黑线，'whiteline'=追白线，None=普通视线控制
     """
     rclpy.init()
     node = rclpy.create_node('thymio_all_in_one_ros_gaze')
@@ -196,7 +203,29 @@ def publish_gaze_cmd_vel(udp_port=5005):
     sock.setblocking(False)            # 非阻塞：无数据时立即抛出异常而非阻塞等待
 
     node.get_logger().info(f'Écoute UDP {udp_port}, publication des données gaze sur /cmd_vel')
-    last_msg = [time.time()]  # 用列表包装，方便在定时器回调中修改, 记录最后一次成功收到视线数据的时间戳
+    last_msg = [time.time()]  # 用列表包装，方便在定时器回调中修改，记录最后一次成功收到视线数据的时间戳
+
+    # --- 循线模式：订阅地面传感器并设置阈值 ---
+    ground = {'left': 0.5, 'right': 0.5}  # 地面传感器当前读数（反射强度，0.0~1.0）
+    if line_mode == 'blackline':
+        # 黑线反射弱，读数小；低于阈值即认为在线上
+        GROUND_THRESHOLD = 0.3
+        on_line = lambda v: v < GROUND_THRESHOLD
+        node.get_logger().info(f'Mode suivi de ligne: NOIRE (seuil < {GROUND_THRESHOLD})')
+    elif line_mode == 'whiteline':
+        # 白线反射强，读数大；高于阈值即认为在线上
+        GROUND_THRESHOLD = 0.7
+        on_line = lambda v: v > GROUND_THRESHOLD
+        node.get_logger().info(f'Mode suivi de ligne: BLANCHE (seuil > {GROUND_THRESHOLD})')
+    else:
+        GROUND_THRESHOLD = 0.5  # 普通模式下不使用，仅占位
+        on_line = lambda v: False
+
+    if line_mode is not None:
+        def _ground_left_cb(msg):   ground.update({'left':  msg.range})
+        def _ground_right_cb(msg):  ground.update({'right': msg.range})
+        node.create_subscription(Range, '/ground/left',  _ground_left_cb,  10)
+        node.create_subscription(Range, '/ground/right', _ground_right_cb, 10)
 
     def timer_callback():
         # --- 清空 UDP 队列，只保留最新一帧视线数据 ---
@@ -217,16 +246,32 @@ def publish_gaze_cmd_vel(udp_port=5005):
                 last_msg[0] = time.time()         # 更新最后收到消息的时间戳
 
                 twist = Twist()
-                if y > 0.8:
-                    twist.linear.x = -0.15
-                elif x < 0.3:
-                    twist.linear.x = 0.1
-                    twist.angular.z = 1.2
-                elif x > 0.7:
-                    twist.linear.x = 0.1
-                    twist.angular.z = -1.2
+                if line_mode is not None:
+                    # --- 循线模式：视线 y 线性控制速度，地面传感器控制方向 ---
+                    # y=0（看屏幕最上方）→ 最大速度 0.2；y=1（看最下方）→ 停止
+                    speed = 0.2 * max(0.0, 1.0 - y)
+                    twist.linear.x = speed
+
+                    # 地面传感器差分修正：哪侧在线上就向那侧转
+                    left_on  = on_line(ground['left'])
+                    right_on = on_line(ground['right'])
+                    if left_on and not right_on:
+                        twist.angular.z = 0.8   # 左侧在线，向左修正（逆时针）
+                    elif right_on and not left_on:
+                        twist.angular.z = -0.8  # 右侧在线，向右修正（顺时针）
+                    # 两侧都在线（线较宽）或都不在线 → 直行，不修正方向
                 else:
-                    twist.linear.x = 0.2
+                    # --- 普通视线控制模式 ---
+                    if y > 0.8:
+                        twist.linear.x = -0.15
+                    elif x < 0.3:
+                        twist.linear.x = 0.1
+                        twist.angular.z = 1.2
+                    elif x > 0.7:
+                        twist.linear.x = 0.1
+                        twist.angular.z = -1.2
+                    else:
+                        twist.linear.x = 0.2
 
                 pub.publish(twist)
             except Exception:
@@ -295,6 +340,12 @@ def main():
         help='等待 /cmd_vel 订阅者出现的最大秒数（默认 30 秒）',
     )
     parser.add_argument(
+        '--line', choices=['blackline', 'whiteline'], default=None,
+        help='循线模式：blackline=追黑线，whiteline=追白线。'
+             '视线向上加速，向下减速至停止；方向由地面传感器自动控制。'
+             '不加此参数则使用普通视线控制（上下左右）。',
+    )
+    parser.add_argument(
         '--busid', type=str, default='1-1',
         help='Windows 下 Thymio 的 USB Bus ID (例如 1-1)，用于自动 attach，为空则跳过',
     )
@@ -358,7 +409,7 @@ def main():
                 print('wsl_tobii_bridge.py n\'est PAS démarré automatiquement (utilisez cette option pour gérer le pont manuellement).')
 
             print('/cmd_vel disponible, début du contrôle par gaze.')
-            publish_gaze_cmd_vel(udp_port=args.udp_port)
+            publish_gaze_cmd_vel(udp_port=args.udp_port, line_mode=args.line)
 
             # 控制循环结束后关闭 bridge 子进程
             if bridge_proc is not None:
