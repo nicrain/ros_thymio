@@ -24,21 +24,18 @@ This workspace is designed for ROS2 and Thymio development. The following are ex
  **Windows + WSL mode (for Tobii eye-tracker support)**
    - ROS2 runs in WSL.
    - Tobii Pro SDK runs on Windows and sends gaze data into WSL via UDP.
-   - The `thymio_tobii/wsl_tobii_bridge.py` script can launch a Windows-side proxy to relay gaze data.   - `usbipd` is required on Windows to forward USB devices (e.g. Thymio) into WSL.
-     Typical commands:
+   - `usbipd` is required on Windows to forward USB devices (e.g. Thymio) into WSL.
+     ★ **Note**: The main script `thymio_ros.py` now **automatically attaches** the Thymio to WSL upon launch (default bus ID `1-1`).
+
+     If you need to install it or manage it manually from Windows PowerShell:
 
      ```powershell
      # Install usbipd (if not already installed)
      winget install --id Microsoft.usbipd
 
-     # Attach the Thymio to WSL (replace <busid> with actual USB bus id)
+     # List devices and manually attach/detach
      usbipd wsl list
      usbipd wsl attach --busid <busid>
-     ```
-
-     To detach:
-
-     ```powershell
      usbipd wsl detach --busid <busid>
      ```
 ### 1) Prepare the environment
@@ -115,15 +112,20 @@ source install/setup.bash
 
 Typical usage depends on the package; for example, to launch a simulation or driver, use the provided launch files in `src/ros-thymio`.
 
-If you want to run the ROS node in `thymio_ros.py`, execute it from the workspace root:
+If you want to run the advanced ROS node in `thymio_ros.py`, execute it from the workspace root:
 
 ```bash
+# 1. Standard Gaze Control (Look Left/Right to turn, Up to advance, Down to reverse)
 python3 thymio_tobii/thymio_ros.py
+
+# 2. Line-Following Mode with Gaze Speed Control (Black line)
+python3 thymio_tobii/thymio_ros.py --line blackline
 ```
 
-(Adjust the command if you run it inside a virtualenv or if you need a ROS2 launch wrapper.)
-
-
+**Key Features of `thymio_ros.py`**:
+* **Auto-Attach USB**: Automatically runs `usbipd` before launching the ROS 2 driver (can be adjusted or disabled via `--busid`).
+* **Line-Following Mode (`--line`)**: Fuses hardware line-tracking with eye-tracking! The Thymio autonomously steers along the line using its IR ground sensors, while your gaze Y-axis acts as the gas pedal (look up to accelerate up to 0.2m/s, look down to stop).
+* **Robust Architecture**: Built with a non-blocking ROS 2 Timer + Spin design to prevent the Tobii bridge communication from ever stalling the robot's hardware loop.
 ## Repository layout
 
 - `src/ros-thymio/` – Thymio-related ROS/ROS2 packages (driver, messages, robot description, etc.)
