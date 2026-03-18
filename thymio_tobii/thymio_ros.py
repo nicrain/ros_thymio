@@ -204,6 +204,7 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
 
     node.get_logger().info(f'Écoute UDP {udp_port}, publication des données gaze sur /cmd_vel')
     last_msg = [time.time()]  # 用列表包装，方便在定时器回调中修改，记录最后一次成功收到视线数据的时间戳
+    state_dir = [0]           # 记录寻线状态（模拟 Aseba：0=前, 1=右, -1=左, 2=原地右, -2=原地左, 10=丢失）
 
     # --- 循线模式：订阅地面传感器并设置阈值 ---
     ground = {'left': 0.5, 'right': 0.5}  # 地面传感器当前读数（反射强度，0.0~1.0）
@@ -251,22 +252,56 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
 
                 twist = Twist()
                 if line_mode is not None:
-                    # --- 循线模式：视线 y 线性控制速度，地面传感器控制方向 ---
+                    # --- 循线模式：融合官方 Aseba 算法与视线控制 ---
                     left_on  = on_line(ground['left'])
                     right_on = on_line(ground['right'])
+                    speed = 0.2 * max(0.0, 1.0 - y)  # 视线 y 控制基础速度：y=0 最快 0.2，y=1 停止
 
-                    if not left_on and not right_on:
-                        # 两侧都未检测到线 → 停止（丢线保护，防止乱走）
-                        pass  # twist 保持默认零值，机器人停止
+                    # 只要速度大于0，就根据官方的状态机算法更新
+                    if speed > 0.01:
+                        # 1. 判定状态
+                        if left_on and right_on:
+                            state_dir[0] = 0  # 两侧在线，直行 (DIR_FRONT)
+                        elif not left_on and right_on:
+                            state_dir[0] = 1  # 右在线，单轮右转 (DIR_RIGHT)
+                        elif left_on and not right_on:
+                            state_dir[0] = -1 # 左在线，单轮左转 (DIR_LEFT)
+                        else:
+                            # 两侧都不在线（Lost）：根据上一时刻的方向决定如何原地寻找
+                            if state_dir[0] > 0:
+                                state_dir[0] = 2  # 原地右转寻找 (DIR_L_RIGHT)
+                            elif state_dir[0] < 0:
+                                state_dir[0] = -2 # 原地左转寻找 (DIR_L_LEFT)
+                            else:
+                                state_dir[0] = 10 # 完全丢失 (DIR_LOST)
+
+                        # 2. 转换为平滑的 Twist 控制
+                        # 根据当前目标速度按比例设定旋转速度，确保不看屏幕（停止）时停止旋转
+                        w_pivot = speed * 8.0   # 单轮转弯的角速度比例
+                        w_spin  = speed * 15.0  # 原地寻线打转的角速度比例（较快）
+
+                        if state_dir[0] == 0:     # DIR_FRONT
+                            twist.linear.x = speed
+                            twist.angular.z = 0.0
+                        elif state_dir[0] == 1:   # DIR_RIGHT (单轮右转)
+                            twist.linear.x = speed / 2.0
+                            twist.angular.z = -w_pivot
+                        elif state_dir[0] == -1:  # DIR_LEFT (单轮左转)
+                            twist.linear.x = speed / 2.0
+                            twist.angular.z = w_pivot
+                        elif state_dir[0] == 2:   # DIR_L_RIGHT (原地右转)
+                            twist.linear.x = 0.0
+                            twist.angular.z = -w_spin
+                        elif state_dir[0] == -2:  # DIR_L_LEFT (原地左转)
+                            twist.linear.x = 0.0
+                            twist.angular.z = w_spin
+                        elif state_dir[0] == 10:  # DIR_LOST
+                            twist.linear.x = 0.0
+                            twist.angular.z = -w_spin
                     else:
-                        # y=0（看屏幕最上方）→ 最大速度 0.2；y=1（看最下方）→ 停止
-                        base_speed = 0.2 * max(0.0, 1.0 - y)
-                        correction = left_on - right_on  # -1、0 或 +1
-
-                        # 转向时减速：修正时前进速度降为一半，避免过冲后震荡
-                        twist.linear.x  = base_speed * (1.0 - 0.5 * abs(correction))
-                        # 修正增益降为 0.4（原 0.8），减小每次修正幅度
-                        twist.angular.z = 0.4 * correction
+                        # 速度为0时完全停止
+                        twist.linear.x = 0.0
+                        twist.angular.z = 0.0
                 else:
                     # --- 普通视线控制模式 ---
                     if y > 0.8:
