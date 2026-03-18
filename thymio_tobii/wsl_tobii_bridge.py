@@ -10,7 +10,7 @@
   python3 thymio_tobii/wsl_tobii_bridge.py --port 5005
 
 在 WSL 中启动此脚本后，您可以运行如下命令接收视线数据：
-  python3 thymio_tobii/thymio_ros.py --mode gaze --udp-port 5005
+  python3 thymio_tobii/thymio_ros.py --udp-port 5005
 """
 
 import argparse
