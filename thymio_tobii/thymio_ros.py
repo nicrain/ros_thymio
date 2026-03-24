@@ -89,21 +89,30 @@ def ros2_topic_has_subscriber(topic):
     return False
 
 
-def start_wsl_tobii_bridge(udp_port: int):
-    """启动同目录下的 wsl_tobii_bridge.py，将 Tobii 视线数据经 UDP 传入 WSL。
+def start_wsl_bridge(udp_port: int, source: str = 'tobii', extra_args=None):
+    """启动同目录桥接脚本，将输入设备数据经 UDP 传入 WSL。
 
-    wsl_tobii_bridge.py 会在 Windows 侧调用 Tobii Pro SDK，
-    读取眼动仪数据并以 JSON UDP 包发送到指定端口。
+    - source='tobii': 使用 wsl_tobii_bridge.py（原有行为）
+    - source='enobio': 使用 wsl_enobio_bridge.py（EEG -> x/y 映射）
 
     Args:
         udp_port: 监听视线数据的 UDP 端口（需与 publish_gaze_cmd_vel 保持一致）
+        source:  输入源名称（tobii 或 enobio）
+        extra_args: 透传给桥接脚本的额外命令行参数列表
     Returns:
         subprocess.Popen 实例，代表 bridge 子进程
     """
+    bridge_by_source = {
+        'tobii': 'wsl_tobii_bridge.py',
+        'enobio': 'wsl_enobio_bridge.py',
+    }
+    bridge_name = bridge_by_source.get(source, 'wsl_tobii_bridge.py')
     # 定位同目录下的 bridge 脚本，无论从哪里运行本脚本都能正确找到
-    bridge_script = os.path.join(os.path.dirname(__file__), 'wsl_tobii_bridge.py')
+    bridge_script = os.path.join(os.path.dirname(__file__), bridge_name)
     # 用当前 Python 解释器运行 bridge，确保环境一致
     cmd = [sys.executable, bridge_script, '--port', str(udp_port)]
+    if extra_args:
+        cmd.extend(extra_args)
     # stdout 与 stderr 合并到同一管道，以便统一读取日志
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
@@ -116,6 +125,11 @@ def start_wsl_tobii_bridge(udp_port: int):
     t = threading.Thread(target=_bridge_output, daemon=True)
     t.start()
     return proc
+
+
+def start_wsl_tobii_bridge(udp_port: int):
+    """兼容旧代码：默认启动 Tobii bridge。"""
+    return start_wsl_bridge(udp_port=udp_port, source='tobii')
 
 
 def wait_for_cmd_vel_ready(timeout=30.0):
@@ -375,7 +389,19 @@ def main():
     )
     parser.add_argument(
         '--no-bridge', action='store_true',
-        help='不自动启动 wsl_tobii_bridge.py（需手动在 Windows 侧启动视线数据桥）',
+        help='不自动启动桥接脚本（需手动在 Windows 侧启动数据桥）',
+    )
+    parser.add_argument(
+        '--bridge-source', choices=['tobii', 'enobio'], default='tobii',
+        help='gaze 模式下桥接输入源：tobii=眼动仪（默认），enobio=EEG（最小改动兼容输入）',
+    )
+    parser.add_argument(
+        '--enobio-mock', action='store_true',
+        help='仅在 bridge-source=enobio 时生效：启用 mock 模式，无需真实 EEG 设备',
+    )
+    parser.add_argument(
+        '--enobio-lsl-outlet-name', default='',
+        help='仅在 bridge-source=enobio 时生效：指定 NIC2 的 LSL EEG outlet 名称',
     )
     parser.add_argument(
         '--timeout', type=float, default=30.0,
@@ -445,17 +471,23 @@ def main():
             # gaze 模式：先启动视线数据桥（除非用户指定手动管理）
             bridge_proc = None
             if not args.no_bridge:
-                print('Démarrage de wsl_tobii_bridge.py (côté Windows) pour générer des données gaze UDP...')
-                bridge_proc = start_wsl_tobii_bridge(args.udp_port)
+                print(f'Démarrage du bridge {args.bridge_source} (côté Windows) pour générer des données gaze UDP...')
+                bridge_extra_args = []
+                if args.bridge_source == 'enobio':
+                    if args.enobio_mock:
+                        bridge_extra_args.append('--mock')
+                    if args.enobio_lsl_outlet_name:
+                        bridge_extra_args.extend(['--lsl-outlet-name', args.enobio_lsl_outlet_name])
+                bridge_proc = start_wsl_bridge(args.udp_port, source=args.bridge_source, extra_args=bridge_extra_args)
             else:
-                print('wsl_tobii_bridge.py n\'est PAS démarré automatiquement (utilisez cette option pour gérer le pont manuellement).')
+                print('Le bridge n\'est PAS démarré automatiquement (utilisez cette option pour gérer le pont manuellement).')
 
             print('/cmd_vel disponible, début du contrôle par gaze.')
             publish_gaze_cmd_vel(udp_port=args.udp_port, line_mode=args.line)
 
             # 控制循环结束后关闭 bridge 子进程
             if bridge_proc is not None:
-                print('Arrêt du processus wsl_tobii_bridge.py.')
+                print('Arrêt du processus bridge.')
                 try:
                     bridge_proc.terminate()          # 发送 SIGTERM，请求优雅退出
                     bridge_proc.wait(timeout=5)      # 等待最多 5 秒
