@@ -1,21 +1,29 @@
 # Enobio Lab Prep (No Device in Advance)
 
-This checklist helps you prepare before going to the lab with limited time.
+This checklist is optimized for limited lab time.
 
 ## Goal
 
-Keep the existing robot control unchanged and only swap the data bridge.
+Run only one command from the main controller and keep old behavior unchanged.
 
-- Existing consumer: `thymio_ros.py` expects UDP JSON packets with `{"x": 0..1, "y": 0..1}`.
-- New bridge: `wsl_enobio_bridge.py`.
+- Existing consumer: thymio_ros.py expects UDP JSON packets with {"x": 0..1, "y": 0..1}
+- Enobio bridge is auto-started by thymio_ros.py when bridge-source is enobio
+
+## Defaults (you usually do not need to set these)
+
+- mode default: gaze
+- udp-port default: 5005
+- bridge-source default: tobii
+
+So for Enobio testing, you only need to override bridge-source (and optional Enobio options).
 
 ## 1) Pre-lab setup on your own PC
 
 ### Windows side
 
-1. Install NIC2 (already done).
-2. Install Python (Windows) and ensure `python.exe` works from WSL interop.
-3. Install bridge dependencies in Windows Python:
+1. Install NIC2.
+2. Install Python on Windows and ensure python.exe is accessible from WSL interop.
+3. Install dependency in Windows Python (needed for real LSL mode):
 
 ```powershell
 python -m pip install --upgrade pip
@@ -24,58 +32,63 @@ python -m pip install pylsl
 
 ### WSL side
 
-1. ROS 2 workspace ready (`ros2` available).
-2. Optional: verify UDP receive path later with mock mode.
+1. ROS 2 workspace ready and sourced.
+2. Verify ros2 is available in PATH.
 
-## 2) Dry run without EEG device
+## 2) Dry run without EEG device (recommended before lab)
 
-Run Enobio bridge in mock mode (from WSL):
+Use only main controller command (bridge is auto-started in mock mode):
+
+```bash
+python3 thymio_tobii/thymio_ros.py --bridge-source enobio --enobio-mock
+```
+
+Expected behavior:
+
+- No real EEG device required
+- Mock x/y data drives the existing gaze control path
+- Good for end-to-end validation of ROS + UDP + motion pipeline
+
+## 3) Lab-day quick steps with real EEG (NIC2 LSL)
+
+1. In NIC2 Protocol Settings, enable LSL streaming.
+2. If possible, note the EEG outlet name.
+3. Start from WSL with one command:
+
+```bash
+python3 thymio_tobii/thymio_ros.py --bridge-source enobio
+```
+
+If multiple EEG streams exist, pin by outlet name:
+
+```bash
+python3 thymio_tobii/thymio_ros.py --bridge-source enobio --enobio-lsl-outlet-name YOUR_OUTLET_NAME
+```
+
+## 4) Optional advanced/debug usage
+
+Disable auto bridge and run your own external sender:
+
+```bash
+python3 thymio_tobii/thymio_ros.py --bridge-source enobio --no-bridge
+```
+
+Run bridge alone only for debugging (not required in normal workflow):
 
 ```bash
 python3 thymio_tobii/wsl_enobio_bridge.py --port 5005 --mock
-```
-
-Then run robot controller (from WSL):
-
-```bash
-python3 thymio_tobii/thymio_ros.py --mode gaze --bridge-source enobio --udp-port 5005
-```
-
-If you only want to test ROS receiver logic (without auto-starting bridge):
-
-```bash
-python3 thymio_tobii/thymio_ros.py --mode gaze --no-bridge --udp-port 5005
-```
-
-## 3) Lab-day quick steps with real EEG
-
-1. In NIC2 Protocol Settings, enable LSL stream.
-2. Note LSL outlet name (example: `provided_name-EEG` source family).
-3. Start bridge:
-
-```bash
-python3 thymio_tobii/wsl_enobio_bridge.py --port 5005
-```
-
-Or filter by outlet name:
-
-```bash
 python3 thymio_tobii/wsl_enobio_bridge.py --port 5005 --lsl-outlet-name YOUR_OUTLET_NAME
 ```
 
-4. Start controller:
+## 5) Troubleshooting
 
-```bash
-python3 thymio_tobii/thymio_ros.py --mode gaze --bridge-source enobio --udp-port 5005
-```
-
-## 4) Troubleshooting
-
-- `python.exe` not found:
+- python.exe not found:
   - Install Python on Windows and enable PATH.
-- No LSL stream found:
-  - Confirm NIC2 started acquisition and LSL is enabled.
+- No LSL EEG stream found:
+  - Confirm NIC2 acquisition started and LSL is enabled.
+  - Try enobio-lsl-outlet-name if multiple outlets are present.
 - Robot not moving:
-  - Verify `/cmd_vel` subscriber readiness and USB attach for Thymio.
+  - Verify /cmd_vel subscriber readiness and Thymio USB attach.
+  - Run test mode once to validate robot driver path.
 - Data too noisy:
-  - Keep this minimal mapping first; tune channel mapping in bridge later.
+  - Keep minimal mapping first, then tune channel mapping in wsl_enobio_bridge.py.
