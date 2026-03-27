@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>thymio_control</name>
+  <version>0.0.0</version>
+  <description>Compatibility package providing thymio control launch and scripts.</description>
+  <maintainer email="robot@example.com">robot</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
