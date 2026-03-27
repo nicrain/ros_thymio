@@ -44,16 +44,16 @@ UDP_PORT = __PORT__
 try:
     import tobii_research as tr
 except ImportError as e:
-    raise SystemExit(f"tobii_research (Tobii Pro SDK) est manquant. Installez-le sur Windows. Erreur : {e}")
+    raise SystemExit(f"tobii_research (Tobii Pro SDK) is missing. Install it on Windows. Error: {e}")
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 trackers = tr.find_all_eyetrackers()
 if not trackers:
-    raise SystemExit("Aucun traqueur Tobii détecté")
+    raise SystemExit("No Tobii eye tracker detected")
 
 tracker = trackers[0]
-print(f"Connecté à : {tracker.device_name}")
+print(f"Connected to: {tracker.device_name}")
 
 
 def callback(gaze_data):
@@ -73,7 +73,7 @@ def callback(gaze_data):
         pass
 
 tracker.subscribe_to(tr.EYETRACKER_GAZE_DATA, callback)
-print(f"Diffusion des données de regard vers WSL {UDP_IP}:{UDP_PORT}")
+print(f"Streaming gaze data to WSL {UDP_IP}:{UDP_PORT}")
 
 try:
     while True:
@@ -145,26 +145,26 @@ def _run_python_bridge(port: int):
 
     win_script_path = _to_windows_path(wsl_script_path)
 
-    print('Démarrage du pont Tobii (Windows Python) ...')
-    print(f'WSL IP {wsl_ip} -> Windows enverra des paquets UDP vers cette adresse (port {port})')
+    print('Starting Tobii bridge (Windows Python) ...')
+    print(f'WSL IP {wsl_ip} -> Windows will send UDP packets to this address (port {port})')
 
     try:
         env = os.environ.copy()
         env.update({'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'})
         proc = _spawn_process(['python.exe', win_script_path], env=env)
     except RuntimeError:
-        print('Erreur : python.exe introuvable (vérifiez que Python est installé sur Windows et accessible depuis WSL).')
+        print('Error: python.exe not found (verify Python is installed on Windows and accessible from WSL).')
         sys.exit(1)
 
-    print('Veuillez confirmer sur Windows que Tobii Pro SDK (tobii_research) est installé et laissez cette fenêtre ouverte.')
-    print('Appuyez sur Ctrl+C pour arrêter.')
+    print('Please confirm Tobii Pro SDK (tobii_research) is installed on Windows and keep this terminal open.')
+    print('Press Ctrl+C to stop.')
 
     return proc
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Démarre un pont Tobii (côté Windows) depuis WSL et envoie les données gaze vers un UDP local.')
-    parser.add_argument('--port', type=int, default=5005, help='Port UDP local à écouter')
+    parser = argparse.ArgumentParser(description='Start Tobii bridge on Windows from WSL and forward gaze data to local UDP.')
+    parser.add_argument('--port', type=int, default=5005, help='Local UDP port to send gaze data to')
     args = parser.parse_args()
     
     proc = _run_python_bridge(args.port)
@@ -173,7 +173,7 @@ def main():
     try:
         while proc.poll() is None:
             time.sleep(0.5)
-        print(f"[win] Processus terminé, code de sortie {proc.returncode}")
+        print(f"[win] Process exited with code {proc.returncode}")
     except KeyboardInterrupt:
         pass
     finally:

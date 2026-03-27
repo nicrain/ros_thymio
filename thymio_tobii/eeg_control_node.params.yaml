@@ -1,0 +1,22 @@
+/**:
+  ros__parameters:
+    input: mock
+    policy: focus
+    tcp_host: 0.0.0.0
+    tcp_port: 6001
+    lsl_stream_type: EEG
+    lsl_timeout: 8.0
+    lsl_channel_map: alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4
+
+    cmd_topic: /cmd_vel
+    publish_hz: 20.0
+    watchdog_sec: 0.5
+    verbose: false
+
+    max_forward_speed: 0.2
+    reverse_speed: -0.15
+    turn_forward_speed: 0.1
+    turn_angular_speed: 1.2
+
+    # '', 'blackline', 'whiteline'
+    line_mode: ''

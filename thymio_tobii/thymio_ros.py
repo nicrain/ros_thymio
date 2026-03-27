@@ -150,6 +150,31 @@ def wait_for_cmd_vel_ready(timeout=30.0):
     return False
 
 
+def parse_control_intents(payload):
+    """解析控制意图并兼容旧字段。
+
+    优先读取语义字段：
+    - speed_intent: 0=最慢, 1=最快
+    - steer_intent: 0=最左, 1=最右
+
+    兼容旧字段：
+    - x: 0=最左, 1=最右
+    - y: 0=最快, 1=最慢
+    """
+
+    if 'speed_intent' in payload:
+        speed_intent = float(payload.get('speed_intent', 0.5))
+    else:
+        speed_intent = 1.0 - float(payload.get('y', 0.5))
+
+    if 'steer_intent' in payload:
+        steer_intent = float(payload.get('steer_intent', 0.5))
+    else:
+        steer_intent = float(payload.get('x', 0.5))
+
+    return speed_intent, steer_intent
+
+
 def publish_test_cmd_vel():
     """测试模式：向 /cmd_vel 发布固定速度序列（前进 2 秒，停止 2 秒）。
 
@@ -159,7 +184,7 @@ def publish_test_cmd_vel():
     node = rclpy.create_node('thymio_all_in_one_ros_ctrl')
     # 创建发布者：消息类型 Twist，话题 /cmd_vel，队列深度 10
     pub = node.create_publisher(Twist, '/cmd_vel', 10)
-    node.get_logger().info('Publication de /cmd_vel (2s avance + 2s arrêt)')
+    node.get_logger().info('Publishing /cmd_vel (2s forward + 2s stop)')
     start = node.get_clock().now()  # 记录开始时刻（使用 ROS 时钟，支持仿真时间）
 
     try:
@@ -173,7 +198,7 @@ def publish_test_cmd_vel():
             elif elapsed < 4.0:
                 twist.linear.x = 0.0    # 2~4 秒：停止
             else:
-                node.get_logger().info('Test terminé.')
+                node.get_logger().info('Test finished.')
                 break
 
             pub.publish(twist)
@@ -187,8 +212,8 @@ def publish_test_cmd_vel():
             pass
 
 
-def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
-    """视线控制模式（核心控制循环）：接收 UDP 视线数据，实时转换为机器人运动指令。
+def publish_intent_cmd_vel(udp_port=5005, line_mode=None):
+    """意图控制模式（核心控制循环）：接收 UDP 控制意图并转换为机器人运动指令。
 
     普通模式（line_mode=None）的视线映射规则（x、y 均为 0.0~1.0）：
         - y > 0.8（视线在屏幕下方）  → 后退
@@ -216,7 +241,7 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
     sock.bind(('0.0.0.0', udp_port))  # '0.0.0.0' 表示接受任意来源网卡的数据
     sock.setblocking(False)            # 非阻塞：无数据时立即抛出异常而非阻塞等待
 
-    node.get_logger().info(f'Écoute UDP {udp_port}, publication des données gaze sur /cmd_vel')
+    node.get_logger().info(f'Listening on UDP {udp_port}, publishing control intents to /cmd_vel')
     last_msg = [time.time()]  # 用列表包装，方便在定时器回调中修改，记录最后一次成功收到视线数据的时间戳
     state_dir = [0]           # 记录寻线状态（模拟 Aseba：0=前, 1=右, -1=左, 2=原地右, -2=原地左, 10=丢失）
 
@@ -228,14 +253,14 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
         # 因此 range > 0.5 表示在黑线上
         GROUND_THRESHOLD = 0.5
         on_line = lambda v: v > GROUND_THRESHOLD
-        node.get_logger().info(f'Mode suivi de ligne: NOIRE (seuil > {GROUND_THRESHOLD})')
+        node.get_logger().info(f'Line-follow mode: BLACK line (threshold > {GROUND_THRESHOLD})')
     elif line_mode == 'whiteline':
         # 白线反射红外光强 → range=0（检测到强反射）
         # 深色背景几乎不反射 → range=1（无反射）
         # 因此 range < 0.5 表示在白线上
         GROUND_THRESHOLD = 0.5
         on_line = lambda v: v < GROUND_THRESHOLD
-        node.get_logger().info(f'Mode suivi de ligne: BLANCHE (seuil < {GROUND_THRESHOLD})')
+        node.get_logger().info(f'Line-follow mode: WHITE line (threshold < {GROUND_THRESHOLD})')
     else:
         GROUND_THRESHOLD = 0.5  # 普通模式下不使用，仅占位
         on_line = lambda v: False
@@ -260,8 +285,10 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
         if latest is not None:
             try:
                 val = json.loads(latest.decode())
-                x = float(val.get('x', 0.5))  # 水平位置：0=最左，1=最右，默认居中
-                y = float(val.get('y', 0.5))  # 垂直位置：0=最上，1=最下，默认居中
+                speed_intent, steer_intent = parse_control_intents(val)
+                # 保留旧阈值逻辑：x 越小越左，y 越大越慢
+                x_legacy = steer_intent
+                y_legacy = 1.0 - speed_intent
                 last_msg[0] = time.time()         # 更新最后收到消息的时间戳
 
                 twist = Twist()
@@ -269,7 +296,7 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
                     # --- 循线模式：融合官方 Aseba 算法与视线控制 ---
                     left_on  = on_line(ground['left'])
                     right_on = on_line(ground['right'])
-                    speed = 0.2 * max(0.0, 1.0 - y)  # 视线 y 控制基础速度：y=0 最快 0.2，y=1 停止
+                    speed = 0.2 * max(0.0, speed_intent)
 
                     # 只要速度大于0，就根据官方的状态机算法更新
                     if speed > 0.01:
@@ -318,12 +345,12 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
                         twist.angular.z = 0.0
                 else:
                     # --- 普通视线控制模式 ---
-                    if y > 0.8:
+                    if y_legacy > 0.8:
                         twist.linear.x = -0.15
-                    elif x < 0.3:
+                    elif x_legacy < 0.3:
                         twist.linear.x = 0.1
                         twist.angular.z = 1.2
-                    elif x > 0.7:
+                    elif x_legacy > 0.7:
                         twist.linear.x = 0.1
                         twist.angular.z = -1.2
                     else:
@@ -352,70 +379,76 @@ def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
             pass
 
 
+def publish_gaze_cmd_vel(udp_port=5005, line_mode=None):
+    """兼容入口：保留旧函数名，内部转发到意图控制实现。"""
+
+    publish_intent_cmd_vel(udp_port=udp_port, line_mode=line_mode)
+
+
 def attach_thymio_usb(busid):
     """通过 usbipd.exe 将 Windows 侧的 Thymio 连接到 WSL"""
     cmd = shutil.which("usbipd.exe")
     if not cmd:
-        print("Erreur : usbipd.exe introuvable.")
+        print("Error: usbipd.exe not found.")
         return False
     
     try:
-        print(f"Tentative d'attachement USB (BusID: {busid}) via usbipd...")
+        print(f"Attempting USB attach via usbipd (BusID: {busid})...")
         subprocess.run([cmd, "attach", "--wsl", "--busid", busid], check=True)
-        print("USB attaché avec succès. Attente de 1.5s pour l'énumération...")
+        print("USB attached successfully. Waiting 1.5s for device enumeration...")
         time.sleep(1.5)  # 等待 Linux 识别并生成 /dev/ttyACM0
         return True
     except subprocess.CalledProcessError as e:
-        print(f"Échec de l'attachement USB (code: {e.returncode}). Le périphérique est peut-être déjà attaché.")
+        print(f"USB attach failed (code: {e.returncode}). The device may already be attached.")
         return False
 
 
 def main():
     """程序入口：解析参数，启动驱动，等待就绪，按模式执行控制逻辑。"""
     parser = argparse.ArgumentParser(
-        description='一键启动 Thymio 驱动并执行速度控制（测试模式或视线控制模式）。'
+        description='One-shot launcher for Thymio driver and velocity control (test or gaze mode).'
     )
     parser.add_argument(
         '--device', default='/dev/ttyACM0',
-        help='Thymio 串口设备路径（如 /dev/ttyACM0 或已含协议的 ser:device=/dev/ttyACM0）',
+        help='Thymio serial device path (e.g. /dev/ttyACM0 or ser:device=/dev/ttyACM0).',
     )
     parser.add_argument(
         '--mode', choices=['test', 'gaze'], default='gaze',
-        help='运行模式：test=发送固定速度序列，gaze=根据 UDP 视线数据实时控制',
+        help='Run mode: test=fixed velocity sequence, gaze=real-time control from UDP gaze data.',
     )
     parser.add_argument(
         '--udp-port', type=int, default=5005,
-        help='gaze 模式下监听视线数据的 UDP 端口（默认 5005）',
+        help='UDP port for gaze data in gaze mode (default: 5005).',
     )
     parser.add_argument(
         '--no-bridge', action='store_true',
-        help='不自动启动桥接脚本（需手动在 Windows 侧启动数据桥）',
+        help='Do not auto-start bridge script (start bridge manually on Windows side).',
     )
     parser.add_argument(
         '--bridge-source', choices=['tobii', 'enobio'], default='tobii',
-        help='gaze 模式下桥接输入源：tobii=眼动仪（默认），enobio=EEG（最小改动兼容输入）',
+        help='Bridge input source in gaze mode: tobii=eye tracker (default), enobio=EEG.',
     )
     parser.add_argument(
         '--enobio-mock', action='store_true',
-        help='仅在 bridge-source=enobio 时生效：启用 mock 模式，无需真实 EEG 设备',
+        help='Only for bridge-source=enobio: enable mock mode without real EEG hardware.',
     )
     parser.add_argument(
         '--enobio-lsl-outlet-name', default='',
-        help='仅在 bridge-source=enobio 时生效：指定 NIC2 的 LSL EEG outlet 名称',
+        help='Only for bridge-source=enobio: specify NIC2 LSL EEG outlet name.',
     )
     parser.add_argument(
         '--timeout', type=float, default=30.0,
-        help='等待 /cmd_vel 订阅者出现的最大秒数（默认 30 秒）',
+        help='Maximum seconds to wait for /cmd_vel subscriber (default: 30).',
     )
     parser.add_argument(
         '--line', choices=['blackline', 'whiteline'], default=None,
-        help='循线模式：blackline=追黑线，whiteline=追白线。'
-             '视线向上加速，向下减速至停止；方向由地面传感器自动控制。'
-             '不加此参数则使用普通视线控制（上下左右）。',
+           help='Line-follow mode: blackline=track black line, whiteline=track white line. '
+               'Gaze up speeds up, gaze down slows to stop; steering comes from ground sensors. '
+               'If omitted, standard gaze control is used.',
     )
     parser.add_argument(
         '--busid', type=str, default='1-1',
-        help='Windows 下 Thymio 的 USB Bus ID (例如 1-1)，用于自动 attach，为空则跳过',
+        help='Windows USB Bus ID of Thymio (e.g. 1-1) for auto-attach; skip if empty.',
     )
     args = parser.parse_args()
 
@@ -440,7 +473,7 @@ def main():
         f'device:={device_arg}',
     ]
 
-    print('Démarrage de thymio_driver ...')
+    print('Starting thymio_driver ...')
     # 以非阻塞方式启动 ros2 launch，stdout/stderr 合并到管道以便读取日志
     launch_proc = run_cmd(ros2_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
@@ -455,23 +488,23 @@ def main():
 
     try:
         # 步骤 1：等待 thymio_driver 完全启动（/cmd_vel 出现订阅者）
-        print('En attente d\'un abonnement à /cmd_vel (max %.1fs)...' % args.timeout)
+        print('Waiting for a /cmd_vel subscriber (max %.1fs)...' % args.timeout)
         if not wait_for_cmd_vel_ready(timeout=args.timeout):
-            print('Temps écoulé : aucun abonnement à /cmd_vel, le driver n\'a peut-être pas démarré ou Thymio n\'est pas connecté.')
-            print('Dernière sortie du lancement (peut contenir des erreurs) :')
+            print('Timeout: no /cmd_vel subscriber found. Driver may have failed to start or Thymio may be disconnected.')
+            print('Last launch output (may contain errors):')
             print('\n'.join(output_buffer[-50:]))
-            print('Vérifiez que Thymio est connecté et que `ros2 launch thymio_driver` fonctionne.')
+            print('Check that Thymio is connected and that `ros2 launch thymio_driver` works.')
             return
 
         # 步骤 2：根据模式执行控制逻辑
         if args.mode == 'test':
-            print('/cmd_vel disponible, début de la publication de test.')
+            print('/cmd_vel is ready, starting test publisher.')
             publish_test_cmd_vel()
         else:
             # gaze 模式：先启动视线数据桥（除非用户指定手动管理）
             bridge_proc = None
             if not args.no_bridge:
-                print(f'Démarrage du bridge {args.bridge_source} (côté Windows) pour générer des données gaze UDP...')
+                print(f'Starting {args.bridge_source} bridge (Windows side) to feed UDP gaze data...')
                 bridge_extra_args = []
                 if args.bridge_source == 'enobio':
                     if args.enobio_mock:
@@ -480,14 +513,14 @@ def main():
                         bridge_extra_args.extend(['--lsl-outlet-name', args.enobio_lsl_outlet_name])
                 bridge_proc = start_wsl_bridge(args.udp_port, source=args.bridge_source, extra_args=bridge_extra_args)
             else:
-                print('Le bridge n\'est PAS démarré automatiquement (utilisez cette option pour gérer le pont manuellement).')
+                print('Bridge is NOT auto-started (use this mode when managing bridge manually).')
 
-            print('/cmd_vel disponible, début du contrôle par gaze.')
-            publish_gaze_cmd_vel(udp_port=args.udp_port, line_mode=args.line)
+            print('/cmd_vel is ready, starting intent control.')
+            publish_intent_cmd_vel(udp_port=args.udp_port, line_mode=args.line)
 
             # 控制循环结束后关闭 bridge 子进程
             if bridge_proc is not None:
-                print('Arrêt du processus bridge.')
+                print('Stopping bridge process.')
                 try:
                     bridge_proc.terminate()          # 发送 SIGTERM，请求优雅退出
                     bridge_proc.wait(timeout=5)      # 等待最多 5 秒
@@ -496,13 +529,13 @@ def main():
 
     finally:
         # 无论正常结束还是异常中断，都必须关闭后台的 ros2 launch 进程
-        print('Nettoyage : arrêt du processus ros2 launch.')
+        print('Cleanup: stopping ros2 launch process.')
         try:
             launch_proc.send_signal(signal.SIGINT)  # 模拟 Ctrl+C，让 ROS 2 优雅退出
             launch_proc.wait(timeout=10)             # 等待最多 10 秒
         except Exception:
             launch_proc.kill()                       # 超时则强制终止
-        print('Terminé.')
+        print('Done.')
 
 
 if __name__ == '__main__':

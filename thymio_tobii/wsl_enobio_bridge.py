@@ -63,8 +63,8 @@ def map_ratio_to_y(beta_alpha_ratio):
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 if MOCK_MODE:
-	print("Mode MOCK actif: envoi de x/y simulés (aucun EEG requis)")
-	print(f"Envoi UDP vers {UDP_IP}:{UDP_PORT}")
+	print("MOCK mode enabled: sending simulated x/y (no EEG hardware required)")
+	print(f"Sending UDP to {UDP_IP}:{UDP_PORT}")
 	t0 = time.time()
 	while True:
 		t = time.time() - t0
@@ -78,20 +78,20 @@ else:
 	try:
 		from pylsl import StreamInlet, resolve_byprop
 	except ImportError as e:
-		raise SystemExit(f"Dépendance manquante: {e}. Installez pylsl sur Windows Python.")
+		raise SystemExit(f"Missing dependency: {e}. Install pylsl in Windows Python.")
 
-	print("Recherche d'un flux LSL EEG...")
+	print("Searching for LSL EEG stream...")
 	streams = resolve_byprop('type', 'EEG', timeout=8)
 	if LSL_OUTLET_NAME:
 		streams = [s for s in streams if s.name() == LSL_OUTLET_NAME]
 	if not streams:
-		raise SystemExit("Aucun flux LSL EEG détecté (ou nom non trouvé). Vérifiez NIC2 LSL.")
+		raise SystemExit("No LSL EEG stream detected (or outlet name not found). Check NIC2 LSL.")
 
 	inlet = StreamInlet(streams[0], max_chunklen=32)
 	info = inlet.info()
 	ch_count = info.channel_count()
-	print(f"Flux connecté: name={info.name()} type={info.type()} channels={ch_count}")
-	print(f"Envoi UDP vers {UDP_IP}:{UDP_PORT}")
+	print(f"Connected stream: name={info.name()} type={info.type()} channels={ch_count}")
+	print(f"Sending UDP to {UDP_IP}:{UDP_PORT}")
 
 	# 使用短窗口平滑，降低抖动。
 	window = []
@@ -198,32 +198,32 @@ def _run_python_bridge(port: int, mock: bool = False, lsl_outlet_name: str = '')
 
 	win_script_path = _to_windows_path(wsl_script_path)
 
-	print('Démarrage du pont Enobio (Windows Python) ...')
-	print(f'WSL IP {wsl_ip} -> Windows enverra des paquets UDP vers ce port {port}')
+	print('Starting Enobio bridge (Windows Python) ...')
+	print(f'WSL IP {wsl_ip} -> Windows will send UDP packets to this port {port}')
 
 	try:
 		env = os.environ.copy()
 		env.update({'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'})
 		proc = _spawn_process(['python.exe', win_script_path], env=env)
 	except RuntimeError:
-		print('Erreur : python.exe introuvable. Installez Python sur Windows et vérifiez son PATH.')
+		print('Error: python.exe not found. Install Python on Windows and verify PATH.')
 		sys.exit(1)
 
 	if mock:
-		print('Mode MOCK actif : aucun matériel EEG requis.')
+		print('MOCK mode enabled: no EEG hardware required.')
 	else:
 		if lsl_outlet_name:
-			print(f'Filtrage du flux LSL par nom: {lsl_outlet_name}')
-		print('Assurez-vous que NIC2 publie un flux LSL de type EEG sur Windows.')
-	print('Appuyez sur Ctrl+C pour arrêter.')
+			print(f'Filtering LSL stream by outlet name: {lsl_outlet_name}')
+		print('Make sure NIC2 publishes an EEG-type LSL stream on Windows.')
+	print('Press Ctrl+C to stop.')
 	return proc
 
 
 def main():
-	parser = argparse.ArgumentParser(description='Démarre un pont Enobio (côté Windows) et envoie des x/y EEG via UDP vers WSL.')
-	parser.add_argument('--port', type=int, default=5005, help='Port UDP local à écouter')
-	parser.add_argument('--mock', action='store_true', help='Active un mode de simulation locale sans appareil EEG')
-	parser.add_argument('--lsl-outlet-name', default='', help='Nom du flux LSL EEG à utiliser (optionnel)')
+	parser = argparse.ArgumentParser(description='Start Enobio bridge on Windows and forward EEG-derived x/y to WSL via UDP.')
+	parser.add_argument('--port', type=int, default=5005, help='Local UDP port to send x/y data to')
+	parser.add_argument('--mock', action='store_true', help='Enable local simulation mode without EEG hardware')
+	parser.add_argument('--lsl-outlet-name', default='', help='LSL EEG outlet name to use (optional)')
 	args = parser.parse_args()
 
 	proc = _run_python_bridge(args.port, mock=args.mock, lsl_outlet_name=args.lsl_outlet_name)
@@ -231,7 +231,7 @@ def main():
 	try:
 		while proc.poll() is None:
 			time.sleep(0.5)
-		print(f"[win] Processus terminé, code de sortie {proc.returncode}")
+		print(f"[win] Process exited with code {proc.returncode}")
 	except KeyboardInterrupt:
 		pass
 	finally:
