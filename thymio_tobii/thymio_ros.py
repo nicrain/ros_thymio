@@ -417,6 +417,10 @@ def main():
         help='Run mode: test=fixed velocity sequence, gaze=real-time control from UDP gaze data.',
     )
     parser.add_argument(
+        '--simulation', action='store_true',
+        help='Use simulation mode (launch thymio_driver with simulation:=True).',
+    )
+    parser.add_argument(
         '--udp-port', type=int, default=5005,
         help='UDP port for gaze data in gaze mode (default: 5005).',
     )
@@ -452,8 +456,8 @@ def main():
     )
     args = parser.parse_args()
 
-    # 步骤 0：可选的自动分配 USB
-    if args.busid:
+    # 步骤 0：仅在真机模式下尝试自动分配 USB（仿真模式无需 USB 设备）
+    if args.busid and not args.simulation:
         attach_thymio_usb(args.busid)
 
     # 检查 ros2 命令是否在 PATH 中（未 source setup.bash 时会缺失）
@@ -461,17 +465,21 @@ def main():
         print('ERROR: ros2 not found in PATH. Please source your ROS2 setup.bash first.')
         sys.exit(1)
 
-    # 规范化设备参数：Aseba 协议要求格式为 ser:device=<路径>
-    # 示例：/dev/ttyACM0 => ser:device=/dev/ttyACM0
-    device_arg = args.device
-    if ':' not in device_arg:
-        device_arg = f'ser:device={device_arg}'
+    # 仿真模式不需要实际串口设备，避免 usbipd 不必要操作
+    if args.simulation:
+        device_arg = ''
+    else:
+        # 规范化设备参数：Aseba 协议要求格式为 ser:device=<路径>
+        # 示例：/dev/ttyACM0 => ser:device=/dev/ttyACM0
+        device_arg = args.device
+        if ':' not in device_arg:
+            device_arg = f'ser:device={device_arg}'
 
     # 构建 ros2 launch 命令列表
-    ros2_cmd = [
-        'ros2', 'launch', 'thymio_driver', 'main.launch',
-        f'device:={device_arg}',
-    ]
+    ros2_cmd = ['ros2', 'launch', 'thymio_driver', 'main.launch']
+    if device_arg:
+        ros2_cmd.append(f'device:={device_arg}')
+    ros2_cmd.append(f'simulation:={"True" if args.simulation else "False"}')
 
     print('Starting thymio_driver ...')
     # 以非阻塞方式启动 ros2 launch，stdout/stderr 合并到管道以便读取日志
