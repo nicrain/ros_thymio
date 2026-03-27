@@ -2,7 +2,7 @@ import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
 from launch.conditions import IfCondition, UnlessCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.launch_description_sources import PythonLaunchDescriptionSource, AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
@@ -57,9 +57,9 @@ def generate_launch_description():
     # 3. 机器人驱动 (真机模式)
     try:
         real_robot_driver = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
+            AnyLaunchDescriptionSource([
                 PathJoinSubstitution([
-                    get_package_share_directory('thymio_driver'), 'launch', 'main.launch.py'
+                    get_package_share_directory('thymio_driver'), 'launch', 'main.launch'
                 ])
             ]),
             condition=UnlessCondition(use_sim)
