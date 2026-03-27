@@ -28,7 +28,7 @@
 - 视线数据通过 UDP 从 Windows 发回 WSL
 - 使用 `usbipd` 将 USB 设备（如 Thymio）转发到 WSL
 
-主脚本 [thymio_tobii/thymio_ros.py](thymio_tobii/thymio_ros.py) 启动时会自动尝试 USB attach（默认 Bus ID `1-1`）。
+主脚本 `thymio_control/thymio_ros.py`（新位置，兼容原 `thymio_tobii/thymio_ros.py`）启动时会自动尝试 USB attach（默认 Bus ID `1-1`）。
 
 如需在 Windows PowerShell 手动安装或管理：
 
@@ -116,7 +116,20 @@ source install/setup.bash
 
 常见用法是通过 `src/ros-thymio` 下的 launch 文件启动仿真或驱动。
 
-如果直接运行高级控制脚本 [thymio_tobii/thymio_ros.py](thymio_tobii/thymio_ros.py)：
+如果直接运行高级控制脚本（推荐新路径）：
+
+- 新路径：`thymio_control/thymio_ros.py`
+
+示例：
+```bash
+# 1) 标准 gaze 控制（左右控制转向，上下控制前后）
+python3 thymio_control/thymio_ros.py
+
+# 2) 循线模式（黑线）+ gaze 速度控制
+python3 thymio_control/thymio_ros.py --line blackline
+```
+
+（旧路径仍可用：`thymio_tobii/thymio_ros.py`，仓库保留兼容备份）
 
 ```bash
 # 1) 标准 gaze 控制（左右控制转向，上下控制前后）
@@ -135,28 +148,30 @@ python3 thymio_tobii/thymio_ros.py --line blackline
 - 策略层：将特征映射到 `speed_intent/steer_intent`
 - 输出层：发送语义意图，过渡期兼容 `x/y`
 
-详细说明见 [thymio_tobii/EEG_PIPELINE.md](thymio_tobii/EEG_PIPELINE.md)。
+详细说明见 [thymio_control/EEG_PIPELINE.md](thymio_control/EEG_PIPELINE.md)（也兼容原 `thymio_tobii/EEG_PIPELINE.md`）。
 
 快速启动：
 
 ```bash
-# 终端 A：运行机器人控制节点，消费 UDP x/y
-python3 thymio_tobii/thymio_ros.py --mode gaze --udp-port 5005 --no-bridge
+# 终端 A：运行机器人控制节点，消费 UDP x/y（新路径）
+python3 thymio_control/thymio_ros.py --mode gaze --udp-port 5005 --no-bridge
 
-# 终端 B：运行 EEG 管线（mock 输入）
-python3 thymio_tobii/eeg_control_pipeline.py --input mock --policy focus --udp-port 5005 --verbose
+# 终端 B：运行 EEG 管线（mock 输入，优先使用新路径）
+python3 thymio_control/eeg_control_pipeline.py --input mock --policy focus --udp-port 5005 --verbose
+
+（兼容旧路径：`thymio_tobii/*`）
 ```
 
 TCP 模式（每行一个 JSON）：
 
 ```bash
-python3 thymio_tobii/eeg_control_pipeline.py --input tcp --tcp-port 6001 --policy theta_beta --udp-port 5005
+python3 thymio_control/eeg_control_pipeline.py --input tcp --tcp-port 6001 --policy theta_beta --udp-port 5005
 ```
 
 LSL 模式：
 
 ```bash
-python3 thymio_tobii/eeg_control_pipeline.py \
+python3 thymio_control/eeg_control_pipeline.py \
   --input lsl \
   --lsl-stream-type EEG \
   --lsl-channel-map "alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4" \
@@ -167,13 +182,13 @@ python3 thymio_tobii/eeg_control_pipeline.py \
 配置文件模式：
 
 ```bash
-python3 thymio_tobii/eeg_control_pipeline.py --config thymio_tobii/experiment_config.yaml
+python3 thymio_control/eeg_control_pipeline.py --config thymio_control/experiment_config.yaml
 ```
 
 原生 ROS2 控制节点（直接发布 /cmd_vel）：
 
 ```bash
-python3 thymio_tobii/eeg_control_node.py --ros-args --params-file thymio_tobii/eeg_control_node.params.yaml
+python3 thymio_control/eeg_control_node.py --ros-args --params-file thymio_control/eeg_control_node.params.yaml
 ```
 
 ### [thymio_tobii/thymio_ros.py](thymio_tobii/thymio_ros.py) 关键特性

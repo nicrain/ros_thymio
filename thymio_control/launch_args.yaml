@@ -1,0 +1,5 @@
+use_sim: true
+use_gui: true
+run_eeg: false
+use_teleop: true
+config_file: eeg_control_node.params.yaml

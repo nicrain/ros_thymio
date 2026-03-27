@@ -1,0 +1,26 @@
+# EEG 实验配置示例
+# 注：命令行显式参数优先级高于本文件
+
+adapter:
+  input: mock
+  tcp_host: 0.0.0.0
+  tcp_port: 6001
+  lsl_stream_type: EEG
+  lsl_timeout: 8.0
+  # 支持两种格式：字典或 "k=v,k=v" 字符串
+  lsl_channel_map:
+    alpha: 0
+    theta: 1
+    beta: 2
+    left_alpha: 3
+    right_alpha: 4
+
+policy_cfg:
+  policy: focus
+
+output:
+  udp_host: 127.0.0.1
+  udp_port: 5005
+  hz: 20.0
+  disable_legacy_xy: false
+  verbose: true
