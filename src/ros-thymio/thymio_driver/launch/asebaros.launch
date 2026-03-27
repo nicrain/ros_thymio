@@ -1,0 +1,69 @@
+<launch>
+
+  <arg name="device" default=""/>
+  <arg name="port" default="44444"/>
+  <arg name="emit_motor" default="1"/>
+  <arg name="emit_buttons" default="1"/>
+  <arg name="emit_acc" default="1"/>
+  <arg name="emit_ground_raw" default="0"/>
+  <arg name="emit_proximity" default="1"/>
+  <arg name="enable_prox_comm" default="1"/>
+  <arg name="motor_deadband" default="10"/>
+  <arg name="motor_period" default="5"/>
+  <arg name="acc_period" default="2"/>
+  <arg name="buttons_period" default="5"/>
+  <arg name="single" default="true"/>
+  <arg name="reduced_api" default="false"/>
+  <arg name="set_id_variable" default="false"/>
+  <arg name="highest_acceptable_protocol_version" default="100"/>
+  <let name="api_suffix" value="_sim" if="$(var reduced_api)"/>
+  <let name="api_suffix" value="" unless="$(var reduced_api)"/>
+  <let name="script" value="thymio_ros$(var api_suffix).aesl" if="$(var single)"/>
+  <let name="script" value="multi_thymio_ros$(var api_suffix).aesl" unless="$(var single)"/>
+  <let name="include_id_in_events" value="false" if="$(var single)"/>
+  <let name="include_id_in_events" value="true" unless="$(var single)"/>
+  <let name="maximal_number_of_nodes" value="1" if="$(var single)"/>
+  <let name="maximal_number_of_nodes" value="0" unless="$(var single)"/>
+  <let name="prefix" value="" if="$(var single)"/>
+  <let name="prefix" value="thymio_" unless="$(var single)"/>
+
+  <node pkg="asebaros" exec="asebaros" name="asebaros" args="--ros-args --log-level info" output="screen">
+    <param name="set_id_variable" value="$(var set_id_variable)"/>
+    <param name="reset_on_closing" value="true"/>
+    <param name="targets" value="$(var device)" value-sep=","/>
+    <param name="port" value="$(var port)"/>
+    <param name="shutdown_on_unconnect" value="false"/>
+    <param name="reload_script_on_reconnect" value="false"/>
+    <param name="highest_acceptable_protocol_version" value="$(var highest_acceptable_protocol_version)"/>
+    <param name="nodes">
+      <param name="thymio">
+        <param name="name" value="thymio-II"/>
+        <param name="prefix" value="$(var prefix)"/>
+        <param name="namespace" value=""/>
+        <param name="accept" value="true"/>
+        <param name="id_variable" value="_id"/>
+        <param name="maximal_number" value="$(var maximal_number_of_nodes)"/>
+        <param name="include_id_in_events" value="$(var include_id_in_events)"/>
+      </param>
+      <param name="other">
+        <param name="accept" value="false"/>
+      </param>
+    </param>
+    <param name="script">
+      <param name="path" value="$(find-pkg-share thymio_driver)/aseba/$(var script)"/>
+      <param name="constants">
+        <param name="MOTOR_PERIOD" value="$(var motor_period)"/>
+        <param name="MOTOR_DEADBAND" value="$(var motor_deadband)"/>
+        <param name="ACC_PERIOD" value="$(var acc_period)"/>
+        <param name="BUTTONS_PERIOD" value="$(var buttons_period)"/>
+        <param name="EMIT_GROUND_RAW" value="$(var emit_ground_raw)"/>
+        <param name="EMIT_BUTTONS" value="$(var emit_buttons)"/>
+        <param name="EMIT_ACC" value="$(var emit_acc)"/>
+        <param name="EMIT_PROXIMITY" value="$(var emit_proximity)"/>
+        <param name="EMIT_MOTOR" value="$(var emit_motor)"/>
+        <param name="ENABLE_PROX_COMM" value="$(var enable_prox_comm)"/>
+      </param>
+    </param>
+  </node>
+
+</launch>

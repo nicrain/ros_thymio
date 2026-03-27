@@ -1,0 +1,124 @@
+Getting started
+===============
+
+Setup
+------
+
+Using a simulation
+~~~~~~~~~~~~~~~~~~
+
+If you have `Aseba Playground <http://wiki.thymio.org/en:asebaplayground>`_, you can use it to simulate a Thymio.
+Launch the simulation with
+
+.. code-block:: console
+
+  asebaplayground
+
+and open the ``thymio.playground`` world that is distributed with Aseba Playground.
+
+Open a console and setup the environment
+
+.. tabs::
+
+   .. code-tab:: bash Linux or macOS
+
+      source <WORKSPACE>/install/setup.bash
+      export DEVICE="tcp:host=localhost;port=33333"
+      export SIMULATION=True
+
+   .. code-tab:: shell Windows
+
+      C:<WORKSPACE>\install\setup.bat
+      SET DEVICE="tcp:host=localhost;port=33333"
+      SET SIMULATION=True
+
+
+Using a real Thymio
+~~~~~~~~~~~~~~~~~~~
+
+Connect the Thymio to your machine. Open a console and setup the environment
+
+.. and take note of which serial device ``<SERIAL_DEVICE>`` it uses (e.g., using Aseba Studio).
+.. export DEVICE="ser:device=<SERIAL_DEVICE>"
+
+.. tabs::
+
+   .. code-tab:: bash Linux or macOS
+
+      source <WORKSPACE>/install/setup.bash
+      export DEVICE="ser:name=Thymio"
+      export SIMULATION=False
+
+   .. code-tab:: shell Windows
+
+      C:\<WORKSPACE>\install\setup.bash
+      SET DEVICE="ser:name=Thymio"
+      SET SIMULATION=False
+
+
+.. note::
+
+  There are `different ways to specify devices <https://aseba-community.github.io/dashel>`_ like
+  ``DEVICE="ser:device=<SERIAL_DEVICE>"`` or ``DEVICE="ser:port=<SERIAL_PORT>"``.
+  On Windows you can inspect the device to which a Thymio is connected from the control panel.
+  For examples, a Thymio connected to COM port #4 can be then specify either
+  using ``DEVICE="ser:device=COM4`` or ``DEVICE="ser:port=4``.
+  On Linux, the usual port is ``DEVICE="ser:device=/dev/ttyACM0`` and
+  on macOS it is ``DEVICE=ser:device=/dev/cu.usbmodem14201``.
+
+
+
+Running ROS-Aseba
+-----------------
+
+Launch the Aseba-ROS bridge with
+
+.. tabs::
+
+   .. code-tab:: bash ROS1
+
+      # use %DEVICE instead of $DEVICE in a Windows command shell
+      roslaunch asebaros_examples all_nodes.launch device:=$DEVICE
+
+   .. code-tab:: shell ROS2
+
+      # use %DEVICE instead of $DEVICE in a Windows command shell
+      ros2 launch asebaros_examples all_nodes.launch device:=$DEVICE
+
+
+See :ref:`examples` for more.
+
+Running ROS-Thymio
+------------------
+
+Launch the Aseba-ROS bridge, the Thymio driver and the Thymio model with
+
+.. tabs::
+
+   .. code-tab:: bash ROS1
+
+      # use %XXX instead of $XXX in a Windows command shell
+      roslaunch thymio_driver main.launch device:=$DEVICE simulation:=$SIMULATION
+
+   .. code-tab:: bash ROS2
+
+      # use %XXX instead of $XXX in a Windows command shell
+      ros2 launch thymio_driver main.launch device:=$DEVICE simulation:=$SIMULATION
+
+In another console, launch rviz to visualize the robot.
+
+.. tabs::
+
+   .. code-tab:: bash ROS1
+
+      # use C:\<WORKSPACE>\install\setup.bat a Windows command shell
+      source <WORKSPACE>/install/setup.bash
+      roslaunch thymio_description rviz.launch
+
+   .. code-tab:: bash ROS2
+
+      # use C:\<WORKSPACE>\install\setup.bat a Windows command shell
+      source <WORKSPACE>/install/setup.bash
+      ros2 launch thymio_description rviz.launch.py
+
+Move the robot around and observe how the proximity sensors are displayed in rviz.
