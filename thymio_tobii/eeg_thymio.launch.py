@@ -1,5 +1,6 @@
 import os
 import sys
+import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, LogInfo, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
@@ -8,25 +9,45 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Pyth
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 
+
+def _load_launch_args():
+    config_file = os.path.join(
+        get_package_share_directory('thymio_tobii'),
+        'launch_args.yaml'
+    )
+    if not os.path.exists(config_file):
+        return {}
+    with open(config_file, 'r') as f:
+        return yaml.safe_load(f) or {}
+
+
 def generate_launch_description():
     """集成启动脚本：支持新一代 Gazebo (GZ Sim) + EEG 控制 + 键盘遥控"""
     gz_partition = f"thymio_{os.getpid()}"
     
-    # 1. 定义配置参数
+    # 1. 读取配置文件 + 公开参数
+    launch_args = _load_launch_args()
+
     use_sim = LaunchConfiguration('use_sim')
     use_gui = LaunchConfiguration('use_gui')
     run_eeg = LaunchConfiguration('run_eeg')
     config_file = LaunchConfiguration('config_file')
     use_teleop = LaunchConfiguration('use_teleop')
-    
+
     declare_use_sim = DeclareLaunchArgument(
-        'use_sim', default_value='false', description='Start GZ Simulation'
+        'use_sim',
+        default_value=str(launch_args.get('use_sim', True)).lower(),
+        description='Start GZ Simulation'
     )
     declare_use_gui = DeclareLaunchArgument(
-        'use_gui', default_value='true', description='Start Gazebo GUI (set false for server-only)'
+        'use_gui',
+        default_value=str(launch_args.get('use_gui', True)).lower(),
+        description='Start Gazebo GUI (set false for server-only)'
     )
     declare_run_eeg = DeclareLaunchArgument(
-        'run_eeg', default_value='true', description='Run EEG control publisher node'
+        'run_eeg',
+        default_value=str(launch_args.get('run_eeg', False)).lower(),
+        description='Run EEG control publisher node'
     )
     declare_config_file = DeclareLaunchArgument(
         'config_file',
@@ -34,7 +55,9 @@ def generate_launch_description():
         description='Path to EEG params'
     )
     declare_use_teleop = DeclareLaunchArgument(
-        'use_teleop', default_value='false', description='Start keyboard teleop'
+        'use_teleop',
+        default_value=str(launch_args.get('use_teleop', True)).lower(),
+        description='Start keyboard teleop'
     )
 
     # 2. 仿真环境逻辑 (适配新 Gazebo / GZ Sim)

@@ -1,0 +1,5 @@
+# GZ Sim + 控制模式配置
+use_sim: true
+use_gui: true
+run_eeg: false
+use_teleop: true
