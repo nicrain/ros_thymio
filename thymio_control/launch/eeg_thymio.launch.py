@@ -121,7 +121,7 @@ def generate_launch_description():
             ])
         ]),
         launch_arguments={
-            'name': 'thymio',
+            'name': '',
             'namespace': '',
         }.items(),
         condition=IfCondition(use_sim)

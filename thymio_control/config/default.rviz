@@ -40,6 +40,7 @@ Visualization Manager:
         Value: /robot_description
       Enabled: true
       Name: RobotModel
+      TF Prefix: thymio
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
       Enabled: true
