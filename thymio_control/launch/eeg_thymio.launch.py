@@ -55,19 +55,13 @@ def generate_launch_description():
         'use_teleop', default_value=_str(_launch_defaults.get('use_teleop', False)), description='Start keyboard teleop'
     )
 
-    world_file = os.path.join(
-        get_package_share_directory('thymio_control'),
-        'config',
-        'thymio_world.sdf'
-    )
-
     gz_sim_gui = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             ])
         ]),
-        launch_arguments={'gz_args': ['-r ', world_file]}.items(),
+        launch_arguments={'gz_args': '-r empty.sdf'}.items(),
         condition=IfCondition(PythonExpression(["'", use_sim, "' == 'true' and '", use_gui, "' == 'true'"]))
     )
 
@@ -77,7 +71,7 @@ def generate_launch_description():
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             ])
         ]),
-        launch_arguments={'gz_args': ['-r -s ', world_file]}.items(),
+        launch_arguments={'gz_args': '-r -s empty.sdf'}.items(),
         condition=IfCondition(PythonExpression(["'", use_sim, "' == 'true' and '", use_gui, "' == 'false'"]))
     )
 
@@ -90,10 +84,6 @@ def generate_launch_description():
             '/model/thymio/tf@tf2_msgs/msg/TFMessage@gz.msgs.Pose_V',
             '/ground/left@sensor_msgs/msg/Range@gz.msgs.Float',
             '/ground/right@sensor_msgs/msg/Range@gz.msgs.Float',
-        ],
-        remappings=[
-            ('/model/thymio/tf', '/tf'),
-            ('/model/thymio/odometry', '/odom'),
         ],
         output='screen',
         condition=IfCondition(use_sim)
@@ -160,12 +150,10 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        arguments=['-d', rviz_config_file],
         output='log'
     )
 
     return LaunchDescription([
-        set_gz_resource_path,
         declare_use_sim,
         declare_use_gui,
         declare_run_eeg,
@@ -177,14 +165,6 @@ def generate_launch_description():
         gz_sim_gui,
         gz_sim_headless,
         sim_model_publisher,
-        sim_spawn_thymio,
-        gz_bridge,
-        real_robot_driver,
-        eeg_node,
-        teleop_node,
-        rviz_node
-    ])
-m_model_publisher,
         sim_spawn_thymio,
         gz_bridge,
         real_robot_driver,
