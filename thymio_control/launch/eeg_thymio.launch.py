@@ -1,5 +1,6 @@
 import os
 import yaml
+import rclpy
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
@@ -55,13 +56,26 @@ def generate_launch_description():
         'use_teleop', default_value=_str(_launch_defaults.get('use_teleop', False)), description='Start keyboard teleop'
     )
 
+    # 路径配置
+    world_file_name = 'thymio_world.sdf'
+
+    # 强制设置环境变量，确保 Gazebo 能找到模型和世界文件
+    set_gz_resource_path = SetEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=[
+            os.path.join(get_package_share_directory('thymio_control'), 'config'),
+            ':',
+            os.path.join(get_package_share_directory('thymio_description'), 'urdf')
+        ]
+    )
+
     gz_sim_gui = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             ])
         ]),
-        launch_arguments={'gz_args': '-r empty.sdf'}.items(),
+        launch_arguments={'gz_args': ['-r ', world_file_name]}.items(),
         condition=IfCondition(PythonExpression(["'", use_sim, "' == 'true' and '", use_gui, "' == 'true'"]))
     )
 
@@ -71,7 +85,7 @@ def generate_launch_description():
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             ])
         ]),
-        launch_arguments={'gz_args': '-r -s empty.sdf'}.items(),
+        launch_arguments={'gz_args': ['-r -s ', world_file_name]}.items(),
         condition=IfCondition(PythonExpression(["'", use_sim, "' == 'true' and '", use_gui, "' == 'false'"]))
     )
 
@@ -80,8 +94,8 @@ def generate_launch_description():
         executable='parameter_bridge',
         arguments=[
             '/model/thymio/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist',
-            '/model/thymio/odometry@nav_msgs/msg/Odometry@gz.msgs.Odometry',
-            '/model/thymio/tf@tf2_msgs/msg/TFMessage@gz.msgs.Pose_V',
+            '/odom@nav_msgs/msg/Odometry[/model/thymio/odometry@gz.msgs.Odometry',
+            '/tf@tf2_msgs/msg/TFMessage[/model/thymio/tf@gz.msgs.Pose_V',
             '/ground/left@sensor_msgs/msg/Range@gz.msgs.Float',
             '/ground/right@sensor_msgs/msg/Range@gz.msgs.Float',
         ],
@@ -155,6 +169,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        set_gz_resource_path,
         declare_use_sim,
         declare_use_gui,
         declare_run_eeg,
