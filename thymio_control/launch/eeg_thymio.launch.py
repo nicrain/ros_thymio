@@ -67,7 +67,7 @@ def generate_launch_description():
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             ])
         ]),
-        launch_arguments={'gz_args': [PythonExpression(["'-r ' + '", world_file, "'"])]}.items(),
+        launch_arguments={'gz_args': ['-r ', world_file]}.items(),
         condition=IfCondition(PythonExpression(["'", use_sim, "' == 'true' and '", use_gui, "' == 'true'"]))
     )
 
@@ -77,7 +77,7 @@ def generate_launch_description():
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             ])
         ]),
-        launch_arguments={'gz_args': [PythonExpression(["'-r -s ' + '", world_file, "'"])]}.items(),
+        launch_arguments={'gz_args': ['-r -s ', world_file]}.items(),
         condition=IfCondition(PythonExpression(["'", use_sim, "' == 'true' and '", use_gui, "' == 'false'"]))
     )
 
@@ -90,6 +90,10 @@ def generate_launch_description():
             '/model/thymio/tf@tf2_msgs/msg/TFMessage@gz.msgs.Pose_V',
             '/ground/left@sensor_msgs/msg/Range@gz.msgs.Float',
             '/ground/right@sensor_msgs/msg/Range@gz.msgs.Float',
+        ],
+        remappings=[
+            ('/model/thymio/tf', '/tf'),
+            ('/model/thymio/odometry', '/odom'),
         ],
         output='screen',
         condition=IfCondition(use_sim)
