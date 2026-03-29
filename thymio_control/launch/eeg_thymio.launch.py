@@ -58,6 +58,11 @@ def generate_launch_description():
 
     # 路径配置
     world_file_name = 'thymio_world.sdf'
+    bridge_config_file = os.path.join(
+        get_package_share_directory('thymio_control'),
+        'config',
+        'gz_bridge.yaml',
+    )
 
     # 强制设置环境变量，确保 Gazebo 能找到模型和世界文件
     set_gz_resource_path = SetEnvironmentVariable(
@@ -92,13 +97,7 @@ def generate_launch_description():
     gz_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=[
-            '/model/thymio/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist',
-            '/odom@nav_msgs/msg/Odometry[/model/thymio/odometry@gz.msgs.Odometry',
-            '/tf@tf2_msgs/msg/TFMessage[/model/thymio/tf@gz.msgs.Pose_V',
-            '/ground/left@sensor_msgs/msg/Range@gz.msgs.Float',
-            '/ground/right@sensor_msgs/msg/Range@gz.msgs.Float',
-        ],
+        parameters=[{'config_file': bridge_config_file}],
         output='screen',
         condition=IfCondition(use_sim)
     )
@@ -131,7 +130,7 @@ def generate_launch_description():
     sim_spawn_thymio = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-name', 'thymio', '-topic', 'robot_description', '-x', '0.0', '-y', '0.0', '-z', '0.05'],
+        arguments=['-name', 'thymio', '-topic', 'robot_description', '-x', '0.0', '-y', '0.0', '-z', '0.08'],
         output='screen',
         condition=IfCondition(use_sim)
     )
