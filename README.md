@@ -28,7 +28,7 @@
 - 视线数据通过 UDP 从 Windows 发回 WSL
 - 使用 `usbipd` 将 USB 设备（如 Thymio）转发到 WSL
 
-主脚本 `thymio_control/thymio_ros.py`（新位置，旧实现保存在 `thymio_tobii.bak/`）启动时会自动尝试 USB attach（默认 Bus ID `1-1`）。
+主脚本 `thymio_control/thymio_ros.py` 启动时会自动尝试 USB attach（默认 Bus ID `1-1`）。
 
 如需在 Windows PowerShell 手动安装或管理：
 
@@ -126,7 +126,6 @@ python3 thymio_control/thymio_ros.py
 python3 thymio_control/thymio_ros.py --line blackline
 ```
 
-旧实现保留在 `thymio_tobii.bak/` 作为备份，不作为默认运行路径。
 
 ## 短期 EEG 优先工作流（支持 TCP/LSL）
 
@@ -137,7 +136,7 @@ python3 thymio_control/thymio_ros.py --line blackline
 - 策略层：将特征映射到 `speed_intent/steer_intent`
 - 输出层：发送语义意图，过渡期兼容 `x/y`
 
-详细说明见 [thymio_control/EEG_PIPELINE.md](thymio_control/EEG_PIPELINE.md)（旧版说明保存在 `thymio_tobii.bak/`）。
+详细说明见 [thymio_control/EEG_PIPELINE.md](thymio_control/EEG_PIPELINE.md)。
 
 快速启动：
 
@@ -148,7 +147,6 @@ python3 thymio_control/thymio_ros.py --mode gaze --udp-port 5005 --no-bridge
 # 终端 B：运行 EEG 管线（mock 输入，优先使用新路径）
 python3 thymio_control/eeg_control_pipeline.py --input mock --policy focus --udp-port 5005 --verbose
 
-（如需检查旧实现，可参考 `thymio_tobii.bak/*`）
 ```
 
 TCP 模式（每行一个 JSON）：
