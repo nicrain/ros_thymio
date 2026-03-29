@@ -98,7 +98,7 @@ def generate_launch_description():
         package='ros_gz_bridge',
         executable='parameter_bridge',
         parameters=[{'config_file': bridge_config_file}],
-        output='screen',
+        output='log',
         condition=IfCondition(use_sim)
     )
 
@@ -123,6 +123,7 @@ def generate_launch_description():
         launch_arguments={
             'name': '',
             'namespace': '',
+            'use_sim_time': 'true',
         }.items(),
         condition=IfCondition(use_sim)
     )
@@ -131,7 +132,7 @@ def generate_launch_description():
         package='ros_gz_sim',
         executable='create',
         arguments=['-name', 'thymio', '-topic', 'robot_description', '-x', '0.0', '-y', '0.0', '-z', '0.08'],
-        output='screen',
+        output='log',
         condition=IfCondition(use_sim)
     )
 
@@ -140,7 +141,7 @@ def generate_launch_description():
         executable='eeg_control_node.py',
         parameters=[config_file],
         remappings=[('/cmd_vel', '/model/thymio/cmd_vel')],
-        output='screen',
+        output='log',
         condition=IfCondition(PythonExpression(["'", run_eeg, "' == 'true' and '", use_teleop, "' == 'false'"])),
     )
 
@@ -149,7 +150,7 @@ def generate_launch_description():
         executable='teleop_twist_keyboard',
         name='teleop',
         remappings=[('cmd_vel', '/model/thymio/cmd_vel')],
-        output='screen',
+        output='log',
         condition=IfCondition(use_teleop)
     )
 
@@ -163,7 +164,8 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        arguments=['-d', rviz_config_file],
+        arguments=['-d', rviz_config_file, '--ros-args', '--log-level', 'error'],
+        parameters=[{'use_sim_time': True}],
         output='log'
     )
 

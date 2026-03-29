@@ -32,6 +32,7 @@ def robot_state_publisher(context: LaunchContext,
                           ) -> List[Node]:
     kwargs = {k: perform_substitutions(context, [v]) for k, v in substitutions.items()}
     namespace = kwargs.pop('namespace')
+    use_sim_time = kwargs.pop('use_sim_time')
     params = {'robot_description': urdf(**kwargs)}
     with open('test.urdf', 'w+') as f:
         f.write(params['robot_description'])
@@ -40,7 +41,7 @@ def robot_state_publisher(context: LaunchContext,
         executable='robot_state_publisher',
         name='robot_state_publisher',
         namespace=namespace,
-        parameters=[params], output='screen')
+        parameters=[params, {'use_sim_time': True}], output='log')
     return [node]
 
 
@@ -53,7 +54,10 @@ def generate_launch_description() -> None:
               for (k, _) in urdf.__annotations__.items() if k != 'return'}
     arguments.append(launch.actions.DeclareLaunchArgument(
         'namespace', default_value='', description=''))
+    arguments.append(launch.actions.DeclareLaunchArgument(
+        'use_sim_time', default_value='false', description='Use simulator clock'))
     kwargs['namespace'] = launch.substitutions.LaunchConfiguration('namespace')
+    kwargs['use_sim_time'] = launch.substitutions.LaunchConfiguration('use_sim_time')
     return LaunchDescription(
         arguments + [
             # launch.actions.LogInfo(msg=launch.substitutions.LaunchConfiguration('name')),
