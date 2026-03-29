@@ -1,8 +1,7 @@
 import os
-import sys
 import yaml
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, LogInfo, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource, AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -13,9 +12,9 @@ def generate_launch_description():
     """集成启动脚本：支持新一代 Gazebo (GZ Sim) + EEG 控制 + 键盘遥控"""
     gz_partition = f"thymio_{os.getpid()}"
     
-    # 1. 读取 launch 参数默认值（来自 thymio_control/launch_args.yaml）
+    # 1. 读取 launch 参数默认值（来自 thymio_control/config/launch_args.yaml）
     try:
-        _launch_args_path = os.path.join(get_package_share_directory('thymio_control'), 'launch_args.yaml')
+        _launch_args_path = os.path.join(get_package_share_directory('thymio_control'), 'config', 'launch_args.yaml')
         with open(_launch_args_path, 'r') as _f:
             _launch_defaults = yaml.safe_load(_f) or {}
     except Exception:
@@ -45,7 +44,11 @@ def generate_launch_description():
     )
     declare_config_file = DeclareLaunchArgument(
         'config_file',
-        default_value=os.path.join(get_package_share_directory('thymio_control'), _launch_defaults.get('config_file', 'eeg_control_node.params.yaml')),
+        default_value=os.path.join(
+            get_package_share_directory('thymio_control'),
+            'config',
+            _launch_defaults.get('config_file', 'eeg_control_node.params.yaml')
+        ),
         description='Path to EEG params'
     )
     declare_use_teleop = DeclareLaunchArgument(
@@ -119,17 +122,11 @@ def generate_launch_description():
         condition=IfCondition(use_sim)
     )
 
-    eeg_script = os.path.join(os.getcwd(), 'thymio_control', 'eeg_control_node.py')
-    eeg_node = ExecuteProcess(
-        cmd=[
-            sys.executable,
-            eeg_script,
-            '--ros-args',
-            '--params-file',
-            config_file,
-            '-r',
-            '/cmd_vel:=/model/thymio/cmd_vel',
-        ],
+    eeg_node = Node(
+        package='thymio_control',
+        executable='eeg_control_node.py',
+        parameters=[config_file],
+        remappings=[('/cmd_vel', '/model/thymio/cmd_vel')],
         output='screen',
         condition=IfCondition(PythonExpression(["'", run_eeg, "' == 'true' and '", use_teleop, "' == 'false'"])),
     )

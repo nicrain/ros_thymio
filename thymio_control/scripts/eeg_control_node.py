@@ -10,7 +10,7 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Range
 
-from eeg_control_pipeline import (
+from thymio_control.eeg_control_pipeline import (
 	POLICIES,
 	build_adapter,
 	with_legacy_xy,

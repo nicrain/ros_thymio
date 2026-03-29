@@ -37,10 +37,10 @@ python -m pip install pylsl
 
 ## 2) Dry run without EEG device (recommended before lab)
 
-Use only main controller command (bridge is auto-started in mock mode):
+Use only the main controller script in the new layout (bridge is auto-started in mock mode):
 
 ```bash
-python3 thymio_control/thymio_ros.py --bridge-source enobio --enobio-mock
+python3 thymio_control/scripts/thymio_ros.py --bridge-source enobio --enobio-mock
 ```
 
 Expected behavior:
@@ -56,13 +56,13 @@ Expected behavior:
 3. Start from WSL with one command:
 
 ```bash
-python3 thymio_control/thymio_ros.py --bridge-source enobio
+python3 thymio_control/scripts/thymio_ros.py --bridge-source enobio
 ```
 
 If multiple EEG streams exist, pin by outlet name:
 
 ```bash
-python3 thymio_control/thymio_ros.py --bridge-source enobio --enobio-lsl-outlet-name YOUR_OUTLET_NAME
+python3 thymio_control/scripts/thymio_ros.py --bridge-source enobio --enobio-lsl-outlet-name YOUR_OUTLET_NAME
 ```
 
 ## 4) Optional advanced/debug usage
@@ -70,14 +70,14 @@ python3 thymio_control/thymio_ros.py --bridge-source enobio --enobio-lsl-outlet-
 Disable auto bridge and run your own external sender:
 
 ```bash
-python3 thymio_control/thymio_ros.py --bridge-source enobio --no-bridge
+python3 thymio_control/scripts/thymio_ros.py --bridge-source enobio --no-bridge
 ```
 
 Run bridge alone only for debugging (not required in normal workflow):
 
 ```bash
-python3 thymio_control/wsl_enobio_bridge.py --port 5005 --mock
-python3 thymio_control/wsl_enobio_bridge.py --port 5005 --lsl-outlet-name YOUR_OUTLET_NAME
+python3 thymio_control/scripts/wsl_enobio_bridge.py --port 5005 --mock
+python3 thymio_control/scripts/wsl_enobio_bridge.py --port 5005 --lsl-outlet-name YOUR_OUTLET_NAME
 ```
 
 ## 5) Troubleshooting
