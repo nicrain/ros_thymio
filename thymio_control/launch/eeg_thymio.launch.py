@@ -12,7 +12,7 @@ def generate_launch_description():
     """集成启动脚本：支持新一代 Gazebo (GZ Sim) + EEG 控制 + 键盘遥控"""
     gz_partition = f"thymio_{os.getpid()}"
     
-    # 1. 读取 launch 参数默认值（来自 thymio_control/config/launch_args.yaml）
+    # 1. 读取 launch 参数默认值
     try:
         _launch_args_path = os.path.join(get_package_share_directory('thymio_control'), 'config', 'launch_args.yaml')
         with open(_launch_args_path, 'r') as _f:
@@ -37,7 +37,7 @@ def generate_launch_description():
         'use_sim', default_value=_str(_launch_defaults.get('use_sim', False)), description='Start GZ Simulation'
     )
     declare_use_gui = DeclareLaunchArgument(
-        'use_gui', default_value=_str(_launch_defaults.get('use_gui', True)), description='Start Gazebo GUI (set false for server-only)'
+        'use_gui', default_value=_str(_launch_defaults.get('use_gui', True)), description='Start Gazebo GUI'
     )
     declare_run_eeg = DeclareLaunchArgument(
         'run_eeg', default_value=_str(_launch_defaults.get('run_eeg', True)), description='Run EEG control publisher node'
@@ -150,6 +150,7 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
+        arguments=['-d', rviz_config_file],
         output='log'
     )
 
