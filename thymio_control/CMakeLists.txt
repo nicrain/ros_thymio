@@ -6,8 +6,14 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(PYTHON_INSTALL_DIR "lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages")
 
-install(DIRECTORY config launch docs
-  DESTINATION share/${PROJECT_NAME}
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+install(DIRECTORY docs/
+  DESTINATION share/${PROJECT_NAME}/docs
 )
 
 install(PROGRAMS
