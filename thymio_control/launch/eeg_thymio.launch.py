@@ -165,6 +165,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        set_gz_resource_path,
         declare_use_sim,
         declare_use_gui,
         declare_run_eeg,
@@ -176,6 +177,14 @@ def generate_launch_description():
         gz_sim_gui,
         gz_sim_headless,
         sim_model_publisher,
+        sim_spawn_thymio,
+        gz_bridge,
+        real_robot_driver,
+        eeg_node,
+        teleop_node,
+        rviz_node
+    ])
+m_model_publisher,
         sim_spawn_thymio,
         gz_bridge,
         real_robot_driver,
