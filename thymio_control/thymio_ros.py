@@ -39,10 +39,10 @@ def ros2_topic_has_subscriber(topic):
         return False
     return False
 
-# 省略其余实现细节，完整版本保留于 thymio_tobii/thymio_ros.py
+# 省略其余实现细节，完整版本保留于 thymio_tobii.bak/thymio_ros.py
 
 def main():
-    print('thymio_control/thymio_ros.py: compatibility shim; prefer thymio_tobii/thymio_ros.py')
+    print('thymio_control/thymio_ros.py: compatibility shim; prefer thymio_tobii.bak/thymio_ros.py')
 
 if __name__ == '__main__':
     main()
