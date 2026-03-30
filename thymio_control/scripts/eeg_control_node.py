@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """EEG 原生 ROS2 控制节点（复制到 thymio_control 以便新路径使用）。"""
 
+import csv
 import json
+import os
 import time
 from typing import Optional
 
@@ -9,6 +11,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Range
+from std_msgs.msg import String
 
 from thymio_control.eeg_control_pipeline import (
 	POLICIES,
@@ -53,9 +56,13 @@ class EegControlNode(Node):
 
 		# 输出与控制参数
 		self.declare_parameter("cmd_topic", "/cmd_vel")
+		self.declare_parameter("analysis_topic", "/eeg_analysis")
 		self.declare_parameter("publish_hz", 20.0)
 		self.declare_parameter("watchdog_sec", 0.5)
 		self.declare_parameter("verbose", False)
+		self.declare_parameter("analysis_verbose", False)
+		self.declare_parameter("record_csv", False)
+		self.declare_parameter("csv_path", "/tmp/thymio_eeg_log.csv")
 
 		# 运动映射参数
 		self.declare_parameter("max_forward_speed", 0.2)
@@ -83,13 +90,44 @@ class EegControlNode(Node):
 		self.policy = POLICIES[policy_name]()
 
 		self.pub = self.create_publisher(Twist, self.get_parameter("cmd_topic").value, 10)
+		self.analysis_pub = self.create_publisher(String, self.get_parameter("analysis_topic").value, 10)
 
 		self.watchdog_sec = float(self.get_parameter("watchdog_sec").value)
 		self.verbose = bool(self.get_parameter("verbose").value)
+		self.analysis_verbose = bool(self.get_parameter("analysis_verbose").value)
+		self.record_csv = bool(self.get_parameter("record_csv").value)
+		self.csv_path = str(self.get_parameter("csv_path").value)
 		self.max_forward_speed = float(self.get_parameter("max_forward_speed").value)
 		self.reverse_speed = float(self.get_parameter("reverse_speed").value)
 		self.turn_forward_speed = float(self.get_parameter("turn_forward_speed").value)
 		self.turn_angular_speed = float(self.get_parameter("turn_angular_speed").value)
+		self._csv_file = None
+		self._csv_writer = None
+		if self.record_csv:
+			csv_dir = os.path.dirname(self.csv_path)
+			if csv_dir:
+				os.makedirs(csv_dir, exist_ok=True)
+			self._csv_file = open(self.csv_path, "a", newline="", encoding="utf-8")
+			self._csv_writer = csv.DictWriter(
+				self._csv_file,
+				fieldnames=[
+					"ts",
+					"source",
+					"control_mode",
+					"packet_no",
+					"feature_count",
+					"movement",
+					"artifact",
+					"current_y_unused",
+					"metrics_json",
+					"command_linear_x",
+					"command_angular_z",
+					"speed_intent",
+					"steer_intent",
+				],
+			)
+			if self._csv_file.tell() == 0:
+				self._csv_writer.writeheader()
 
 		self.line_mode = str(self.get_parameter("line_mode").value).strip() or None
 		self.ground = {"left": 0.5, "right": 0.5}
@@ -115,8 +153,20 @@ class EegControlNode(Node):
 		self.create_timer(1.0 / max(hz, 1e-6), self._tick)
 
 		self.get_logger().info(
-			f"EEG node started: input={input_mode} policy={policy_name} topic={self.get_parameter('cmd_topic').value}"
+			(
+				f"EEG node started: input={input_mode} policy={policy_name} "
+				f"topic={self.get_parameter('cmd_topic').value} analysis_topic={self.get_parameter('analysis_topic').value}"
+			)
 		)
+
+	def _close_csv(self) -> None:
+		if self._csv_file is not None:
+			try:
+				self._csv_file.close()
+			except Exception:
+				pass
+			self._csv_file = None
+			self._csv_writer = None
 
 	def _ground_left_cb(self, msg: Range) -> None:
 		self.ground["left"] = float(msg.range)
@@ -127,26 +177,137 @@ class EegControlNode(Node):
 	def _tick(self) -> None:
 		frame = self.adapter.read_frame()
 		if frame is not None:
-			features = enrich_features(frame.metrics)
-			self.last_intents = self.policy.compute_intents(features)
+			movement_value = frame.metrics.get("movement")
+			has_movement = isinstance(movement_value, (int, float))
+			has_band_features = all(key in frame.metrics for key in ("alpha", "theta", "beta"))
+			features = enrich_features(frame.metrics) if has_band_features else dict(frame.metrics)
+			if has_band_features:
+				self.last_intents = self.policy.compute_intents(features)
+			else:
+				self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 			self.last_msg_ts = time.time()
+			control_mode = "band_features"
+			command_linear_x = 0.0
+			command_angular_z = 0.0
+			if has_movement:
+				control_mode = "movement"
+				movement = float(movement_value)
+				twist = Twist()
+				if 0.0 < movement < 0.5:
+					twist.linear.x = self.max_forward_speed
+				elif 0.5 < movement < 1.0:
+					twist.linear.x = self.reverse_speed
+				elif movement > 1.0:
+					twist.angular.z = self.turn_angular_speed
+				elif movement < 0.0:
+					pass
+				else:
+					pass
+				command_linear_x = float(twist.linear.x)
+				command_angular_z = float(twist.angular.z)
+				self.pub.publish(twist)
+				self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
+				analysis = {
+					"ts": frame.ts,
+					"source": frame.source,
+					"metrics": frame.metrics,
+					"features": features,
+					"intents": self.last_intents,
+					"control_mode": control_mode,
+					"command_linear_x": command_linear_x,
+					"command_angular_z": command_angular_z,
+				}
+				self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
+				if self.analysis_verbose:
+					self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
+				if self._csv_writer is not None:
+					row = {
+						"ts": frame.ts,
+						"source": frame.source,
+						"control_mode": control_mode,
+						"packet_no": frame.metrics.get("packet_no", 0.0),
+						"feature_count": frame.metrics.get("feature_count", 0.0),
+						"movement": frame.metrics.get("movement", 0.0),
+						"artifact": frame.metrics.get("artifact", 0.0),
+						"current_y_unused": frame.metrics.get("current_y_unused", -1.0),
+						"metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
+						"command_linear_x": command_linear_x,
+						"command_angular_z": command_angular_z,
+						"speed_intent": self.last_intents.get("speed_intent", 0.5),
+						"steer_intent": self.last_intents.get("steer_intent", 0.5),
+					}
+					self._csv_writer.writerow(row)
+					self._csv_file.flush()
+				if self.verbose:
+					self.get_logger().info(
+						(
+							"src=%s mode=%s packet_no=%.0f feature_count=%.0f movement=%.3f artifact=%.3f "
+							"cmd_x=%.3f cmd_z=%.3f"
+						)
+						% (
+							frame.source,
+							control_mode,
+							frame.metrics.get("packet_no", 0.0),
+							frame.metrics.get("feature_count", 0.0),
+							frame.metrics.get("movement", 0.0),
+							frame.metrics.get("artifact", 0.0),
+							command_linear_x,
+							command_angular_z,
+						)
+					)
+				return
+
+			analysis = {
+				"ts": frame.ts,
+				"source": frame.source,
+				"metrics": frame.metrics,
+				"features": features,
+				"intents": self.last_intents,
+				"control_mode": control_mode,
+				"command_linear_x": command_linear_x,
+				"command_angular_z": command_angular_z,
+			}
+			self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
+			if self.analysis_verbose:
+				self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
+			if self._csv_writer is not None:
+				row = {
+					"ts": frame.ts,
+					"source": frame.source,
+					"control_mode": control_mode,
+					"packet_no": frame.metrics.get("packet_no", 0.0),
+					"feature_count": frame.metrics.get("feature_count", 0.0),
+					"movement": frame.metrics.get("movement", 0.0),
+					"artifact": frame.metrics.get("artifact", 0.0),
+					"current_y_unused": frame.metrics.get("current_y_unused", -1.0),
+					"metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
+					"command_linear_x": command_linear_x,
+					"command_angular_z": command_angular_z,
+					"speed_intent": self.last_intents.get("speed_intent", 0.5),
+					"steer_intent": self.last_intents.get("steer_intent", 0.5),
+				}
+				self._csv_writer.writerow(row)
+				self._csv_file.flush()
+			if not has_band_features:
+				self.pub.publish(Twist())
+				return
 			if self.verbose:
 				self.get_logger().info(
 					(
-						"src=%s alpha=%.3f theta=%.3f beta=%.3f t/b=%.3f b/(a+t)=%.3f "
+						"src=%s packet_no=%.0f feature_count=%.0f movement=%.3f artifact=%.3f "
 						"speed_intent=%.3f steer_intent=%.3f"
 					)
 					% (
 						frame.source,
-						features.get("alpha", 0.0),
-						features.get("theta", 0.0),
-						features.get("beta", 0.0),
-						features.get("theta_beta", 0.0),
-						features.get("beta_alpha_theta", 0.0),
+						frame.metrics.get("packet_no", 0.0),
+						frame.metrics.get("feature_count", 0.0),
+						frame.metrics.get("movement", 0.0),
+						frame.metrics.get("artifact", 0.0),
 						self.last_intents.get("speed_intent", 0.5),
 						self.last_intents.get("steer_intent", 0.5),
 					)
 				)
+			return
 
 		if time.time() - self.last_msg_ts > self.watchdog_sec:
 			self.pub.publish(Twist())
@@ -219,6 +380,7 @@ def main(args: Optional[list] = None) -> None:
 		rclpy.spin(node)
 	finally:
 		node.destroy_node()
+		node._close_csv()
 		try:
 			rclpy.shutdown()
 		except Exception:

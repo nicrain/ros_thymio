@@ -47,6 +47,61 @@ class BaseAdapter:
         raise NotImplementedError
 
 
+def _parse_sod_packet(packet: str) -> Dict[str, float]:
+    """解析 SOD...EOD 包，提取序号、特征数、运动值和特征值。"""
+
+    packet = packet.strip()
+    if not packet.startswith("SOD") or not packet.endswith("EOD"):
+        return {}
+
+    body = packet[3:-3].strip()
+    if not body:
+        return {}
+
+    parts = [part.strip() for part in body.split(";") if part.strip() != ""]
+    if len(parts) < 5:
+        return {}
+
+    try:
+        packet_no = int(float(parts[0]))
+        feature_count = int(float(parts[1]))
+        movement = float(parts[2])
+    except Exception:
+        return {}
+
+    expected_len = 5 + feature_count
+    if len(parts) < expected_len:
+        return {}
+
+    metrics: Dict[str, float] = {
+        "packet_no": float(packet_no),
+        "feature_count": float(feature_count),
+        "movement": movement,
+    }
+
+    feature_values = parts[3 : 3 + feature_count]
+    for idx, value in enumerate(feature_values, start=1):
+        try:
+            metrics[f"feature_{idx}"] = float(value)
+        except Exception:
+            continue
+
+    try:
+        metrics["artifact"] = float(parts[3 + feature_count])
+    except Exception:
+        metrics["artifact"] = 0.0
+
+    try:
+        metrics["current_y_unused"] = float(parts[4 + feature_count])
+    except Exception:
+        metrics["current_y_unused"] = -1.0
+
+    if feature_count == 1 and "feature_1" in metrics:
+        metrics["feature_value"] = metrics["feature_1"]
+
+    return metrics
+
+
 class MockAdapter(BaseAdapter):
     def __init__(self) -> None:
         self.t0 = time.time()
@@ -144,6 +199,89 @@ class TcpJsonAdapter(BaseAdapter):
             return None
 
         return EegFrame(ts=time.time(), source="tcp", metrics=metrics)
+
+
+class TcpClientJsonAdapter(BaseAdapter):
+    """作为 TCP 客户端连接到外部 EEG 服务，并读取按行分隔的数据。"""
+
+    def __init__(self, host: str, port: int, reconnect_sec: float = 1.0) -> None:
+        self._host = host
+        self._port = int(port)
+        self._reconnect_sec = max(0.1, float(reconnect_sec))
+        self._sock: Optional[socket.socket] = None
+        self._buf = ""
+        self._last_connect_attempt = 0.0
+
+    def _close_socket(self) -> None:
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+        self._sock = None
+        self._buf = ""
+
+    def _connect_if_needed(self) -> None:
+        if self._sock is not None:
+            return
+
+        now = time.time()
+        if now - self._last_connect_attempt < self._reconnect_sec:
+            return
+
+        self._last_connect_attempt = now
+        try:
+            sock = socket.create_connection((self._host, self._port), timeout=2.0)
+            sock.settimeout(0.2)
+            self._sock = sock
+            print(f"[tcp-client] connected to {self._host}:{self._port}")
+        except Exception:
+            self._sock = None
+
+    def _extract_packet(self) -> Optional[str]:
+        start = self._buf.find("SOD")
+        if start < 0:
+            if len(self._buf) > 4096:
+                self._buf = self._buf[-128:]
+            return None
+
+        end = self._buf.find("EOD", start)
+        if end < 0:
+            if start > 0:
+                self._buf = self._buf[start:]
+            return None
+
+        packet = self._buf[start : end + 3]
+        self._buf = self._buf[end + 3 :]
+        return packet
+
+    def read_frame(self) -> Optional[EegFrame]:
+        self._connect_if_needed()
+        if self._sock is None:
+            return None
+
+        try:
+            data = self._sock.recv(4096)
+            if not data:
+                print(f"[tcp-client] disconnected from {self._host}:{self._port}")
+                self._close_socket()
+                return None
+            self._buf += data.decode("utf-8", errors="ignore")
+        except socket.timeout:
+            return None
+        except OSError:
+            self._close_socket()
+            return None
+
+        packet = self._extract_packet()
+        if packet is None:
+            return None
+
+        metrics = _parse_sod_packet(packet)
+        if not metrics:
+            return None
+
+        return EegFrame(ts=time.time(), source="tcp_client", metrics=metrics)
 
 
 class LslAdapter(BaseAdapter):
@@ -351,6 +489,8 @@ def build_adapter(args: Any) -> BaseAdapter:
         return KeyboardAdapter()
     if args.input == "tcp":
         return TcpJsonAdapter(args.tcp_host, args.tcp_port)
+    if args.input == "tcp_client":
+        return TcpClientJsonAdapter(args.tcp_host, args.tcp_port)
     if args.input == "lsl":
         channel_map = parse_channel_map(args.lsl_channel_map)
         if not channel_map:
@@ -362,7 +502,7 @@ def build_adapter(args: Any) -> BaseAdapter:
 def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
-    parser.add_argument("--input", choices=["mock", "tcp", "lsl"], default="mock")
+    parser.add_argument("--input", choices=["mock", "tcp", "tcp_client", "lsl"], default="mock")
     parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
 
     parser.add_argument("--tcp-host", default="0.0.0.0", help="TCP server bind host")
