@@ -197,7 +197,7 @@ class EegControlNode(Node):
 					twist.linear.x = self.max_forward_speed
 				elif 0.5 < movement < 1.0:
 					twist.linear.x = self.reverse_speed
-				elif movement > 1.0:
+				elif movement == 1.0:
 					twist.angular.z = self.turn_angular_speed
 				elif movement < 0.0:
 					pass
