@@ -396,7 +396,7 @@ class FocusPolicy(Policy):
 
         asym = features.get("alpha_asym", 0.0)
         steer_intent = clip01(0.5 + 1.1 * asym)
-        speed_intent = clip01(1.0 - focus_norm)
+        speed_intent = clip01(focus_norm)
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
 
 
