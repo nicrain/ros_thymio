@@ -5,6 +5,11 @@
 - 你能定位每个文件、每个函数的职责。
 - 你能在不破坏系统的前提下自己改参数、改控制逻辑、改输入源。
 
+Phase 2 说明：
+- 主入口已统一到 `launch/experiment_core.launch.py`。
+- `scripts/thymio_ros.py` 已降级为 deprecated 兼容壳。
+- 桥接脚本已迁移到 `tools/bridges/`。
+
 范围说明：
 - 只讲 `thymio_control` 文件夹内的内容。
 - 重点是 Python 代码（launch + scripts + pipeline）和关键配置文件（yaml/sdf/cmake/package）。
@@ -26,9 +31,9 @@
 ```text
 [Windows: Tobii/Enobio SDK]
         |
-        | UDP(JSON x/y) via wsl_*_bridge.py
+  | UDP(JSON speed_intent/steer_intent) via tools/bridges/wsl_*_bridge.py
         v
-[WSL/Linux: thymio_ros.py 或 eeg_control_node.py]
+[WSL/Linux: gaze_control_node.py 或 eeg_control_node.py]
         |
         | ROS 2 Twist
         v
@@ -52,16 +57,22 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 ## 3. 目录与角色
 
 - `launch/eeg_thymio.launch.py`
-  - 整体启动入口（仿真、EEG 节点、teleop、rviz）。
+  - EEG 模式入口（包装 `experiment_core.launch.py`）。
+- `launch/gaze_thymio.launch.py`
+  - Gaze 模式入口（包装 `experiment_core.launch.py`）。
+- `launch/experiment_core.launch.py`
+  - 统一编排入口（驱动、仿真、桥接、控制节点、teleop、rviz）。
 - `scripts/eeg_control_node.py`
   - ROS 2 控制节点，核心生产命令速度。
+- `scripts/gaze_control_node.py`
+  - ROS 2 UDP 意图网关节点，消费 UDP 并发布 `Twist`。
 - `thymio_control/eeg_control_pipeline.py`
   - 输入适配层 + 特征工程 + 控制策略。
 - `scripts/thymio_ros.py`
-  - 一体化启动器（启动 driver、桥接、控制环）。
-- `scripts/wsl_tobii_bridge.py`
+  - 已废弃，仅输出迁移提示。
+- `tools/bridges/wsl_tobii_bridge.py`
   - WSL 拉起 Windows Python 子进程，读取 Tobii，回传 UDP。
-- `scripts/wsl_enobio_bridge.py`
+- `tools/bridges/wsl_enobio_bridge.py`
   - 同上，但数据源是 Enobio/LSL 或 mock。
 - `config/*.yaml`
   - 启动参数、实验参数、Gazebo 桥接参数。
@@ -162,7 +173,7 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 - 从 `thymio_control.eeg_control_pipeline` 导入：
   - `POLICIES`: 策略注册表
   - `build_adapter`: 输入适配器工厂
-  - `with_legacy_xy`: 兼容旧坐标语义
+  - `clip01`: 意图归一化
   - `enrich_features`: 派生特征计算
 
 ### 5.2 类 `_AdapterArgs`
@@ -400,10 +411,10 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 - 比值高表示注意弱 -> 速度低。
 - 输出类似，但速度映射公式不同。
 
-#### `with_legacy_xy`
-- 给新意图添加兼容字段：
-  - `x = steer_intent`
-  - `y = 1 - speed_intent`
+#### `speed_intent/steer_intent` 语义（Phase 2）
+- 管线只输出标准意图字段：
+  - `speed_intent`（越大前进越强）
+  - `steer_intent`（0 左、0.5 中、1 右）
 
 ### 6.6 配置与 CLI 主程序
 
@@ -426,95 +437,34 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 2. 可选加载 config 并 merge。
 3. `adapter + policy` 实例化。
 4. 建 UDP socket，进入循环：
-   - 有 frame -> 特征 + 策略 -> 可选 legacy xy -> 发 UDP
+  - 有 frame -> 特征 + 策略 -> 发 UDP 标准意图
    - 无 frame -> sleep 一个周期
 5. Ctrl+C 退出。
 
 ---
 
-## 7. 一体化控制器：scripts/thymio_ros.py
+## 7. Phase 2 编排方式（替代一体化脚本）
 
-这个脚本偏“工程集成”，不是单纯算法。
+`scripts/thymio_ros.py` 已降级为 deprecated 兼容壳，不再承担驱动/桥接/控制环职责。
 
-### 7.1 辅助函数
-
-- `run_cmd(cmd, **kwargs)`
-  - subprocess.Popen 包装。
-- `stream_output(proc, buffer, label)`
-  - 异步打印子进程输出，同时写 buffer（用于失败后回放日志）。
-- `ros2_topic_has_subscriber(topic)`
-  - 调 `ros2 topic info` 检查订阅者数量。
-- `wait_for_cmd_vel_ready(timeout)`
-  - 轮询直到 `/cmd_vel` 有订阅者。
-
-### 7.2 Bridge 启动函数
-
-- `start_wsl_bridge(udp_port, source, extra_args)`
-  - `source=tobii/enobio` 选择不同桥接脚本。
-  - 启动桥脚本子进程 + 后台线程打印输出。
-- `start_wsl_tobii_bridge`
-  - 只是兼容包装，内部调用 `start_wsl_bridge`。
-
-### 7.3 意图解析
-
-- `parse_control_intents(payload)`
-  - 兼容新旧格式：
-    - 新：`speed_intent/steer_intent`
-    - 旧：`x/y`
-  - 统一返回 `(speed_intent, steer_intent)`。
-
-### 7.4 测试模式发布 `publish_test_cmd_vel`
-
-- 2 秒前进 + 2 秒停止。
-- 用来验证 `/cmd_vel` 通路是否通。
-
-### 7.5 真实控制环 `publish_intent_cmd_vel`
-
-关键流程：
-1. 初始化 ROS 节点与 `/cmd_vel` publisher。
-2. UDP 非阻塞监听 `udp_port`。
-3. 每 0.05s 的 timer 回调：
-   - 把 socket 里缓存包读空，只保留“最新包”。
-   - 解析 JSON。
-   - 转成 `speed_intent/steer_intent`。
-   - 如果是循线模式：地面传感器状态机控制。
-   - 否则：旧 gaze 阈值规则控制。
-   - 发布 Twist。
-4. 看门狗：超过 0.5s 没新包，发布零速。
-
-注意：
-- 这里用了大量 `try/except: pass`，追求“不中断控制环”。
-- 代价是调试时异常信息会被吞掉。
-
-### 7.6 USB 附加 `attach_thymio_usb`
-
-- 用 `usbipd.exe` 把 Windows USB 设备挂载进 WSL。
-- 失败时打印提示，但不抛异常。
-
-### 7.7 `main()` 启动编排
-
-做了 4 件事：
-
-1. 解析大量命令行参数（设备、模式、仿真、桥接来源、线模式等）。
-2. 非仿真时尝试 `attach_thymio_usb`。
-3. 启动 `ros2 launch thymio_driver main.launch ...`。
-4. 等待 `/cmd_vel` ready 后：
-   - test 模式：跑固定速度测试；
-   - gaze 模式：可自动起桥 + 进入 UDP 控制环。
-
-最后在 `finally` 中总是清理 launch 进程。
+当前职责分离：
+1. Launch 编排：`launch/experiment_core.launch.py`
+2. EEG 控制节点：`scripts/eeg_control_node.py`
+3. Gaze 控制节点：`scripts/gaze_control_node.py`
+4. 外部桥接：`tools/bridges/wsl_tobii_bridge.py`、`tools/bridges/wsl_enobio_bridge.py`
+5. USB 附加：`tools/system/prepare_usb.sh`
 
 ---
 
 ## 8. Windows 桥接脚本
 
-## 8.1 scripts/wsl_tobii_bridge.py
+## 8.1 tools/bridges/wsl_tobii_bridge.py
 
 核心思路：
 - 在 WSL 里动态生成一个临时 Python 脚本字符串。
 - 用 `python.exe` 在 Windows 解释器运行这个脚本。
 - 子脚本里调用 `tobii_research` 订阅 gaze 数据。
-- 每次回调把 `(x,y)` 通过 UDP 发回 WSL。
+- 每次回调把 gaze 数据通过 UDP 发回 WSL（由 `gaze_control_node.py` 在 ROS 侧做语义统一）。
 
 关键函数：
 - `_get_wsl_ip()`
@@ -528,13 +478,13 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 - `main()`
   - 解析 `--port`，守护子进程生命周期。
 
-## 8.2 scripts/wsl_enobio_bridge.py
+## 8.2 tools/bridges/wsl_enobio_bridge.py
 
 结构和 Tobii 桥几乎一样，但模板脚本分两模式：
 
 1. `--mock`
 - 不依赖设备。
-- 正弦波生成平滑 `(x,y)`，20Hz 发 UDP。
+- 正弦波生成平滑意图数据，20Hz 发 UDP。
 
 2. 真实 LSL 模式
 - `pylsl` 发现 EEG stream。
@@ -658,8 +608,8 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 
 1. WSL 脚本拉起 Windows Python
 2. Windows SDK 拿设备数据
-3. UDP 发 `x/y` 到 WSL
-4. `thymio_ros.py` 收 UDP，映射 Twist 并发布 `/cmd_vel`
+3. UDP 发意图到 WSL
+4. `gaze_control_node.py` 收 UDP，映射 Twist 并发布 `/cmd_vel`
 
 ---
 
@@ -720,7 +670,7 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 1. `/cmd_vel` 是谁发布、谁消费？
 2. `run_eeg` 和 `use_teleop` 的互斥关系是什么？
 3. `watchdog_sec` 如何保证安全停机？
-4. `speed_intent` 与旧 `y` 的关系为什么是反向？
+4. `speed_intent` 与线速度命令如何换算？
 5. `line_mode` 如何改变控制规则？
 6. 为什么需要 `gz_bridge.yaml`？
 7. 为什么要桥接到 Windows Python？
@@ -736,14 +686,16 @@ EEG 输入（mock/tcp/tcp_client/lsl）
 
 ```bash
 # 仿真 + teleop
-ros2 launch thymio_control eeg_thymio.launch.py use_sim:=true use_teleop:=true run_eeg:=false
+ros2 launch thymio_control experiment_core.launch.py use_sim:=true use_teleop:=true run_eeg:=false run_gaze:=false
 
-# 启动 EEG 控制节点（参数文件）
-ros2 run thymio_control eeg_control_node.py --ros-args --params-file \
-  $(ros2 pkg prefix thymio_control)/share/thymio_control/config/eeg_control_node.params.yaml
+# 启动 EEG 模式
+ros2 launch thymio_control eeg_thymio.launch.py
 
-# 一体化脚本（Enobio mock）
-python3 thymio_control/scripts/thymio_ros.py --bridge-source enobio --enobio-mock
+# 启动 Gaze 模式
+ros2 launch thymio_control gaze_thymio.launch.py
+
+# 单独运行 Enobio bridge（mock）
+python3 thymio_control/tools/bridges/wsl_enobio_bridge.py --port 5005 --mock
 ```
 
 ---

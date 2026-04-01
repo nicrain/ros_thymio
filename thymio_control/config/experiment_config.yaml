@@ -22,5 +22,4 @@ output:
   udp_host: 127.0.0.1
   udp_port: 5005
   hz: 20.0
-  disable_legacy_xy: false
   verbose: true

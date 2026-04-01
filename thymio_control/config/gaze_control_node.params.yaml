@@ -1,0 +1,18 @@
+/**:
+  ros__parameters:
+    udp_host: 0.0.0.0
+    udp_port: 5005
+
+    cmd_topic: /cmd_vel
+    publish_hz: 20.0
+    watchdog_sec: 0.5
+
+    # '', 'blackline', 'whiteline'
+    line_mode: ''
+    line_threshold: 0.5
+
+    max_forward_speed: 0.2
+    turn_angular_speed: 1.2
+    reverse_speed: -0.15
+    reverse_threshold: 0.2
+    steer_deadzone: 0.1

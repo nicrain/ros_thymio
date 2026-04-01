@@ -26,9 +26,13 @@
 - ROS2 运行在 WSL
 - Tobii Pro SDK 运行在 Windows
 - 视线数据通过 UDP 从 Windows 发回 WSL
-- 使用 `usbipd` 将 USB 设备（如 Thymio）转发到 WSL
+- 使用 `usbipd` 将 USB 设备（如 Thymio）转发到 WSL（已拆分为独立系统脚本）
 
-主脚本位于 `thymio_control/scripts/thymio_ros.py`，安装后可通过 `ros2 run thymio_control thymio_ros.py` 启动；它会自动尝试 USB attach（默认 Bus ID `1-1`）。
+Phase 2 后不再使用一体化胖脚本作为主入口，统一改为 `ros2 launch` 编排：
+
+- EEG: `ros2 launch thymio_control eeg_thymio.launch.py`
+- Gaze: `ros2 launch thymio_control gaze_thymio.launch.py`
+- 统一编排: `ros2 launch thymio_control experiment_core.launch.py`
 
 如需在 Windows PowerShell 手动安装或管理：
 
@@ -120,14 +124,14 @@ source install/setup.bash
 ros2 launch thymio_control eeg_thymio.launch.py use_sim:=true use_gui:=true
 ```
 
-如果直接运行高级控制脚本，推荐新路径 `thymio_control/scripts/thymio_ros.py`：
+Gaze 控制推荐入口：
 
 ```bash
-# 1) 标准 gaze 控制（左右控制转向，上下控制前后）
-python3 thymio_control/scripts/thymio_ros.py
+# 1) 标准 gaze 控制（包含 Tobii bridge）
+ros2 launch thymio_control gaze_thymio.launch.py
 
-# 2) 循线模式（黑线）+ gaze 速度控制
-python3 thymio_control/scripts/thymio_ros.py --line blackline
+# 2) 统一编排下同时启动 EEG + Gaze（按需）
+ros2 launch thymio_control experiment_core.launch.py run_eeg:=true run_gaze:=true
 ```
 
 
@@ -138,15 +142,15 @@ python3 thymio_control/scripts/thymio_ros.py --line blackline
 - 适配层：从 `mock`、`tcp`、`lsl` 读取 EEG
 - 特征层：计算比值和非对称特征
 - 策略层：将特征映射到 `speed_intent/steer_intent`
-- 输出层：发送语义意图，过渡期兼容 `x/y`
+- 输出层：发送语义意图（`speed_intent/steer_intent`）
 
 详细说明见 [thymio_control/docs/EEG_PIPELINE.md](thymio_control/docs/EEG_PIPELINE.md)。
 
 快速启动：
 
 ```bash
-# 终端 A：运行机器人控制节点，消费 UDP x/y（新路径）
-python3 thymio_control/scripts/thymio_ros.py --mode gaze --udp-port 5005 --no-bridge
+# 终端 A：运行 ROS2 控制节点（消费 UDP speed/steer 意图）
+python3 thymio_control/scripts/eeg_control_node.py --ros-args --params-file thymio_control/config/eeg_control_node.params.yaml
 
 # 终端 B：运行 EEG 管线（mock 输入，优先使用新路径）
 python3 -m thymio_control.eeg_control_pipeline --input mock --policy focus --udp-port 5005 --verbose
@@ -182,11 +186,12 @@ python3 -m thymio_control.eeg_control_pipeline --config thymio_control/config/ex
 python3 thymio_control/scripts/eeg_control_node.py --ros-args --params-file thymio_control/config/eeg_control_node.params.yaml
 ```
 
-### [thymio_control/scripts/thymio_ros.py](thymio_control/scripts/thymio_ros.py) 关键特性
+### 桥接与系统工具
 
-- **Auto-attach USB**：启动前自动调用 `usbipd` attach（可通过 `--busid` 调整）
-- **Line-follow 模式**：地面传感器负责循线，gaze 的 y 轴作为“油门”
-- **稳健循环结构**：非阻塞 UDP + ROS2 timer/spin，降低桥接阻塞风险
+- Tobii bridge: `thymio_control/tools/bridges/wsl_tobii_bridge.py`
+- Enobio bridge: `thymio_control/tools/bridges/wsl_enobio_bridge.py`
+- USB attach helper: `thymio_control/tools/system/prepare_usb.sh`
+- `thymio_control/scripts/thymio_ros.py` 已保留为 deprecated 兼容入口（仅提示迁移命令）。
 
 ## 仓库结构
 

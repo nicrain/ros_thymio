@@ -16,7 +16,7 @@ from std_msgs.msg import String
 from thymio_control.eeg_control_pipeline import (
 	POLICIES,
 	build_adapter,
-	with_legacy_xy,
+	clip01,
 	enrich_features,
 )
 
@@ -69,6 +69,8 @@ class EegControlNode(Node):
 		self.declare_parameter("reverse_speed", -0.15)
 		self.declare_parameter("turn_forward_speed", 0.1)
 		self.declare_parameter("turn_angular_speed", 1.2)
+		self.declare_parameter("reverse_threshold", 0.2)
+		self.declare_parameter("steer_deadzone", 0.1)
 
 		# 可选循线
 		self.declare_parameter("line_mode", "")  # '', 'blackline', 'whiteline'
@@ -101,6 +103,8 @@ class EegControlNode(Node):
 		self.reverse_speed = float(self.get_parameter("reverse_speed").value)
 		self.turn_forward_speed = float(self.get_parameter("turn_forward_speed").value)
 		self.turn_angular_speed = float(self.get_parameter("turn_angular_speed").value)
+		self.reverse_threshold = float(self.get_parameter("reverse_threshold").value)
+		self.steer_deadzone = float(self.get_parameter("steer_deadzone").value)
 		self._csv_file = None
 		self._csv_writer = None
 		if self.record_csv:
@@ -317,15 +321,14 @@ class EegControlNode(Node):
 		self.pub.publish(twist)
 
 	def _intents_to_twist(self, intents) -> Twist:
-		legacy = with_legacy_xy(intents)
-		x = float(legacy.get("x", 0.5))
-		y = float(legacy.get("y", 0.5))
+		speed_intent = clip01(float(intents.get("speed_intent", 0.0)))
+		steer_intent = clip01(float(intents.get("steer_intent", 0.5)))
 
 		twist = Twist()
 		if self.line_mode is not None:
 			left_on = self.on_line(self.ground["left"])
 			right_on = self.on_line(self.ground["right"])
-			speed = self.max_forward_speed * max(0.0, 1.0 - y)
+			speed = self.max_forward_speed * speed_intent
 
 			if speed > 0.01:
 				if left_on and right_on:
@@ -359,16 +362,13 @@ class EegControlNode(Node):
 				else:
 					twist.angular.z = -w_spin
 		else:
-			if y > 0.8:
+			if speed_intent < self.reverse_threshold:
 				twist.linear.x = self.reverse_speed
-			elif x < 0.3:
-				twist.linear.x = self.turn_forward_speed
-				twist.angular.z = self.turn_angular_speed
-			elif x > 0.7:
-				twist.linear.x = self.turn_forward_speed
-				twist.angular.z = -self.turn_angular_speed
-			else:
-				twist.linear.x = self.max_forward_speed
+				return twist
+			twist.linear.x = self.max_forward_speed * speed_intent
+			steer = (steer_intent - 0.5) * 2.0
+			if abs(steer) >= self.steer_deadzone:
+				twist.angular.z = -self.turn_angular_speed * steer
 
 		return twist
 

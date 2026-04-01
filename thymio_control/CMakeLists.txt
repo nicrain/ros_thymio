@@ -18,10 +18,13 @@ install(DIRECTORY docs/
 
 install(PROGRAMS
   scripts/eeg_control_node.py
+  scripts/gaze_control_node.py
   scripts/thymio_ros.py
-  scripts/wsl_enobio_bridge.py
-  scripts/wsl_tobii_bridge.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY tools/
+  DESTINATION share/${PROJECT_NAME}/tools
 )
 
 install(DIRECTORY thymio_control/

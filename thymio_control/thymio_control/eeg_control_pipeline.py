@@ -5,7 +5,7 @@
 - 从 TCP / LSL / mock 输入读取 EEG 指标。
 - 统一到标准帧结构，便于后续算法复用。
 - 通过可插拔策略输出 speed_intent / steer_intent（范围 [0, 1]）。
-- 以 UDP 发送到现有 thymio_ros.py 的 gaze 输入链路。
+- 以 UDP 发送到 ROS2 gaze_control_node 的输入链路。
 
 该文件保持单文件自包含，便于快速迭代实验。
 """
@@ -351,10 +351,9 @@ class Policy:
 class FocusPolicy(Policy):
     """将专注相关分数映射为速度，将 alpha 非对称映射为转向。
 
-    输出语义与现有 thymio_ros.py 的 gaze 逻辑保持一致：
-    - y 越低：越偏向前进
-    - y 越高：越偏向减速/停止/后退区间
-    - x < 0.3 左转，x > 0.7 右转
+    输出语义：
+    - speed_intent 越大，前进意图越强
+    - steer_intent < 0.5 偏左，> 0.5 偏右
     """
 
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
@@ -377,20 +376,6 @@ class ThetaBetaPolicy(Policy):
         speed_intent = clip01(1.0 - (ratio - 0.5) / 2.0)
         steer_intent = clip01(0.5 + 1.1 * features.get("alpha_asym", 0.0))
         return {"speed_intent": speed_intent, "steer_intent": steer_intent}
-
-
-def with_legacy_xy(intents: Dict[str, float]) -> Dict[str, float]:
-    """附加旧字段 x/y，保证旧链路可继续使用。"""
-
-    speed_intent = clip01(float(intents.get("speed_intent", 0.5)))
-    steer_intent = clip01(float(intents.get("steer_intent", 0.5)))
-    out = dict(intents)
-    out["speed_intent"] = speed_intent
-    out["steer_intent"] = steer_intent
-    out["x"] = steer_intent
-    # 旧链路中 y 越小速度越快，因此与 speed_intent 方向相反。
-    out["y"] = clip01(1.0 - speed_intent)
-    return out
 
 
 POLICIES = {
@@ -435,7 +420,7 @@ def flatten_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     sections = {
         "adapter": ["input", "tcp_host", "tcp_port", "lsl_stream_type", "lsl_timeout", "lsl_channel_map"],
         "policy_cfg": ["policy"],
-        "output": ["udp_host", "udp_port", "hz", "disable_legacy_xy", "verbose"],
+        "output": ["udp_host", "udp_port", "hz", "verbose"],
     }
     for sec, keys in sections.items():
         sub = cfg.get(sec)
@@ -519,11 +504,6 @@ def main() -> int:
     parser.add_argument("--udp-host", default="127.0.0.1", help="UDP target host for intent packets")
     parser.add_argument("--udp-port", type=int, default=5005, help="UDP target port")
     parser.add_argument("--hz", type=float, default=20.0, help="Output max rate")
-    parser.add_argument(
-        "--disable-legacy-xy",
-        action="store_true",
-        help="Disable legacy x/y fields in outgoing payload",
-    )
     parser.add_argument("--verbose", action="store_true", help="Print feature and output details")
     args = parser.parse_args()
 
@@ -554,8 +534,6 @@ def main() -> int:
             if frame is not None:
                 feats = enrich_features(frame.metrics)
                 intents = policy.compute_intents(feats)
-                if not args.disable_legacy_xy:
-                    intents = with_legacy_xy(intents)
                 payload = json.dumps(intents).encode()
                 sock.sendto(payload, target)
                 last_ts = time.time()

@@ -11,9 +11,9 @@ def generate_launch_description():
             [PathJoinSubstitution([get_package_share_directory("thymio_control"), "launch", "experiment_core.launch.py"])]
         ),
         launch_arguments={
-            "run_eeg": "true",
-            "run_gaze": "false",
-            "use_tobii_bridge": "false",
+            "run_eeg": "false",
+            "run_gaze": "true",
+            "use_tobii_bridge": "true",
             "use_enobio_bridge": "false",
         }.items(),
     )
