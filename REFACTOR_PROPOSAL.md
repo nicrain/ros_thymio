@@ -1,5 +1,9 @@
 # Thymio Control 架构重构与标准化提议 (Refactor Proposal)
 
+> **架构状态标记说明 (Status Legend)**：
+> - `[✅ 已完成]`：代表对应的架构规划已被彻底实施并验证。
+> - `[⏳ 待办]`：代表新追加或正在排期中的重构任务。未来的任何新需求追加都**必须**使用这两者之一对章节标题进行清晰的进度标注。
+
 ## 1. 背景与现状分析 (Context & Analysis)
 项目目前已完成从 `thymio_tobii` 到 `thymio_control` 的核心迁移。虽然功能完备，但 `thymio_control/` 目录呈现“扁平化”结构，存在以下挑战：
 - **职责混杂**：Python 核心逻辑、YAML 配置文件、ROS 2 Launch 启动脚本以及 Markdown 文档全部堆放在根目录。
@@ -37,7 +41,7 @@ thymio_control/
 └── package.xml              # 需检查依赖声明
 ```
 
-## 4. 实施路线图 (Action Plan for the AI Agent)
+## 4. [✅ 已完成] 实施路线图 (Action Plan for the AI Agent)
 
 ### Step 1: 建立目录骨架
 创建 `config/`, `launch/`, `docs/`, `scripts/`, `thymio_control/` 子目录。
@@ -62,7 +66,7 @@ thymio_control/
 - 运行 `colcon build` 确保包结构依然可编译。
 - 使用 `ros2 run` 和 `ros2 launch` 测试节点是否能正确加载参数。
 
-## 5. 参数系统升级 (Parameter System Upgrade)
+## 5. [✅ 已完成] 参数系统升级 (Parameter System Upgrade)
 为了减少复杂的命令行输入并为未来的 GUI 交付打下基础，重构应包含以下参数管理逻辑：
 
 ### 5.1 引入 Master YAML 模式
@@ -112,7 +116,7 @@ eeg:
 
 ### 7.2. 具体执行步骤 (Execution Steps)
 
-#### 步骤一：创建标准的 ROS 2 Launch 编排文件
+#### [✅ 已完成] 步骤一：创建标准的 ROS 2 Launch 编排文件
 - **动作**：在 `launch/` 目录下创建一个“大一统”的 `experiment_core.launch.py` 文件。
 - **职责**：
   1. 通过 `IncludeLaunchDescription` 去启动底层的 `thymio_driver main.launch` 硬件驱动包。
@@ -120,23 +124,23 @@ eeg:
   3. 启动顶层的策略控制系统节点（如原生的 `eeg_control_node.py` 或未来的视线控制 Node）。
 - **收益**：可以通过 `ros2 launch thymio_control experiment_core.launch.py` 一键无痛启动全套流程。
 
-#### 步骤二：给 `thymio_ros.py` “剔骨减肥”并降级
+#### [✅ 已完成] 步骤二：给 `thymio_ros.py` “剔骨减肥”并降级
 - **动作**：移除 `thymio_ros.py` 中**所有**进程管理（`subprocess` 启动桥接、启动驱动）以及 UDP Socket 监听逻辑。
 - **拆分操作**：
   - 将 USB 挂载（`usbipd`）提取成完全独立的纯种系统脚本（如 `scripts/prepare_usb.sh` 或 `.bat`），不再由 ROS 系统介入操作系统的 USB 转发层。
   - 如果依旧需要视线（Gaze）控制，新建一个标准节点 `gaze_control_node.py`，结构对标现在的 `eeg_control_node.py`：订阅包含了速度与转向意图的话题（或直接读取原始视线话题），并在处理完毕后通过 `Twist` 发布 `/cmd_vel`。
 - **废弃判定**：在拆分完成后，原有的巨无霸 `thymio_ros.py` 应该被正式标记为废除（Deprecated）或者彻底删减。不留歧义。
 
-#### 步骤三：消除冗余的“语义补丁”
+#### [✅ 已完成] 步骤三：消除冗余的“语义补丁”
 - **动作**：重洗数据管线：修改 `thymio_control/thymio_control/eeg_control_pipeline.py`。
 - **细节清理**：斩草除根式地删除 `with_legacy_xy()` 函数。策略层只产出且只向上层节点输送 `speed_intent` 和 `steer_intent` 字段。
 - **控制逻辑直连**：下游控制端（如 `eeg_control_node.py` 的算法 `_intents_to_twist`）直接使用获得的 `speed_intent` 换算成马达的具体线速度指令，消除先将速度翻译为 `y` 甚至反转 `1.0 - speed` 的逆天扭曲逻辑。
 
-#### 步骤四：清理异构的桥接物 (Clean Heterogeneous Bridges)
+#### [✅ 已完成] 步骤四：清理异构的桥接物 (Clean Heterogeneous Bridges)
 - **动作**：现在项目在使用标准 LSL 链路时，已大大减少了对私有桥接数据流的依赖。后续应当将这些特殊硬件专用脚本（如 `wsl_tobii_bridge.py`、`wsl_enobio_bridge.py`）移入一个单独的网关目录（如 `tools/bridges/`）以示隔离。
 - **目的**：保证核心的 `thymio_control/` 是完全纯粹的 ROS2 + Python 算法环境，所有外部硬件数据源在进入 ROS 核心生态之前，只负责完成“格式清洗并在网络边界转化为 ROS2 Topic”，不可在 ROS 工作空间中肆意蔓延。
 
-### 7.3. 焦点问题专录：Tobii 视线控制链路的架构迁移 (Gaze Control Migration)
+### 7.3. [✅ 已完成] 焦点问题专录：Tobii 视线控制链路的架构迁移 (Gaze Control Migration)
 
 **业务需求：** 在彻底改用 `ros2 launch` 和 YAML 参数解耦的全新架构后，必须继续无缝支持 Windows 端通过 UDP 将 Tobii 视线坐标发送至本地 ROS 2 控制 Thymio 的老链路，并保持使用体验的统一性。
 
@@ -170,3 +174,25 @@ eeg:
      - 利用 `Node` Action 启动 `gaze_control_node.py` 并指派加载上文建立的 YAML 档。
      - 若有需要，直接通过 `ExecuteProcess` 或定制化 `Node`，把 `wsl_tobii_bridge.py` 视作子进程一并在后台守护拉起。
    - **交付形态**：科研人员在使用眼动仪实验时，其启动入口与 EEG 完全同构，只需运行标准口令 `ros2 launch thymio_control gaze_thymio.launch.py`，整个从 Windows 眼动采集到 Thymio 轮子动作的通路，以最优的解耦形式顺畅拉起。
+
+### 7.4. [⏳ 待办] 性能优化专录：消除 TCP 链路中的累积延迟 (TCP Buffer Bloat Fix)
+
+**业务痛点：**
+在使用基于 `tcp_client` (连接至 NIC Server) 接收 EEG 的实验中，起初控制很跟手，但随着时间推移，控制的延迟会越来越大（滑档）。
+
+**问题根因 (Root Cause Analysis)：**
+这是典型的**慢速消费者与 TCP 缓冲区发胀 (Slow Reader Buffer Bloat)**。
+- 生产端（EEG设备/NIC）：以极高频率发包（如 250Hz - 500Hz）。
+- 消费端（`eeg_control_node.py`）：受限于机械运动特征，循环节频率限制在 `publish_hz: 20`（即每 0.05 秒调用一次管线）。
+- 目前位于 `eeg_control_pipeline.py` 中的 `TcpClientJsonAdapter` 及其姐妹类 `TcpJsonAdapter` 在每次被滴答唤醒时，只从 TCP 缓存里解析**排在最前面的唯一一个包**。多余的包就囤积在操作系统的 Socket 缓存池中。随着时间推移，ROS2 拿到的永远是几十秒之前的陈年旧包。
+
+**架构级解决方案 (Architectural Fix Plan)：**
+执行代码重构任务的工程师需对 `thymio_control/eeg_control_pipeline.py` 的 Socket 适配器进行如下升级：
+
+1. **废弃超时阻塞，拥抱异步非阻塞**：
+   - 将 `TcpClientJsonAdapter._connect_if_needed` 与 `TcpJsonAdapter._accept_if_needed` 里的 `socket.settimeout(0.2)` 全部更正为真·无阻塞模式 `socket.setblocking(False)`。
+2. **在单周期内彻底排干缓存池 (Drain the Buffer)**：
+   - 在 `read_frame()` 方法中加入 `while True:` 循环不停地调用 `recv()`，直到捕获到 `BlockingIOError` 为止。将期间收到的全部历史字节流拼接到一起。
+3. **特征帧丢弃法 (Drop Old Frames)**：
+   - 从完整排干的庞大字符串中，提取出此段间隔内的 **所有包**，然后丢弃前面的数据，仅保留并在本周期返回 **倒数最后一个且结构完整的 JSON/SOD包**。
+- **收益**：保证进入后续控制算法（无论 20Hz 还是 10Hz）的数据帧永远具备 `绝对零时差` 的新鲜度。
