@@ -140,7 +140,7 @@ class TcpJsonAdapter(BaseAdapter):
         self._srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._srv.bind((host, port))
         self._srv.listen(1)
-        self._srv.settimeout(0.3)
+        self._srv.setblocking(False)
 
         self._conn = None
         self._addr = None
@@ -151,54 +151,69 @@ class TcpJsonAdapter(BaseAdapter):
             return
         try:
             conn, addr = self._srv.accept()
-            conn.settimeout(0.1)
+            conn.setblocking(False)
             self._conn = conn
             self._addr = addr
             print(f"[tcp] client connected: {addr}")
-        except socket.timeout:
+        except BlockingIOError:
             pass
+
+    def _drain_socket(self) -> bool:
+        """排干当前周期内的所有可读字节，返回是否读取到新数据。"""
+        if self._conn is None:
+            return False
+
+        got_data = False
+        while True:
+            try:
+                data = self._conn.recv(4096)
+                if not data:
+                    print("[tcp] client disconnected")
+                    self._conn.close()
+                    self._conn = None
+                    self._addr = None
+                    self._buf = ""
+                    return False
+                self._buf += data.decode("utf-8", errors="ignore")
+                got_data = True
+            except BlockingIOError:
+                break
+            except OSError:
+                self._conn = None
+                self._addr = None
+                self._buf = ""
+                return False
+
+        # 避免无换行噪声无限增长
+        if "\n" not in self._buf and len(self._buf) > 65536:
+            self._buf = self._buf[-1024:]
+        return got_data
 
     def read_frame(self) -> Optional[EegFrame]:
         self._accept_if_needed()
         if self._conn is None:
             return None
 
-        try:
-            data = self._conn.recv(4096)
-            if not data:
-                print("[tcp] client disconnected")
-                self._conn.close()
-                self._conn = None
-                self._addr = None
-                self._buf = ""
-                return None
-            self._buf += data.decode("utf-8", errors="ignore")
-        except socket.timeout:
-            return None
-        except OSError:
-            self._conn = None
-            self._addr = None
-            self._buf = ""
+        self._drain_socket()
+
+        latest_metrics: Optional[Dict[str, float]] = None
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                metrics = {k: float(v) for k, v in obj.items() if isinstance(v, (int, float))}
+            except Exception:
+                continue
+            if metrics:
+                latest_metrics = metrics
+
+        if latest_metrics is None:
             return None
 
-        if "\n" not in self._buf:
-            return None
-
-        line, self._buf = self._buf.split("\n", 1)
-        line = line.strip()
-        if not line:
-            return None
-
-        try:
-            obj = json.loads(line)
-            metrics = {k: float(v) for k, v in obj.items() if isinstance(v, (int, float))}
-        except Exception:
-            return None
-
-        if not metrics:
-            return None
-
-        return EegFrame(ts=time.time(), source="tcp", metrics=metrics)
+        return EegFrame(ts=time.time(), source="tcp", metrics=latest_metrics)
 
 
 class TcpClientJsonAdapter(BaseAdapter):
@@ -232,56 +247,68 @@ class TcpClientJsonAdapter(BaseAdapter):
         self._last_connect_attempt = now
         try:
             sock = socket.create_connection((self._host, self._port), timeout=2.0)
-            sock.settimeout(0.2)
+            sock.setblocking(False)
             self._sock = sock
             print(f"[tcp-client] connected to {self._host}:{self._port}")
         except Exception:
             self._sock = None
 
-    def _extract_packet(self) -> Optional[str]:
-        start = self._buf.find("SOD")
-        if start < 0:
-            if len(self._buf) > 4096:
-                self._buf = self._buf[-128:]
-            return None
+    def _extract_all_packets(self) -> list[str]:
+        packets: list[str] = []
+        while True:
+            start = self._buf.find("SOD")
+            if start < 0:
+                if len(self._buf) > 65536:
+                    self._buf = self._buf[-1024:]
+                return packets
 
-        end = self._buf.find("EOD", start)
-        if end < 0:
             if start > 0:
                 self._buf = self._buf[start:]
-            return None
 
-        packet = self._buf[start : end + 3]
-        self._buf = self._buf[end + 3 :]
-        return packet
+            end = self._buf.find("EOD", 3)
+            if end < 0:
+                return packets
+
+            packets.append(self._buf[: end + 3])
+            self._buf = self._buf[end + 3 :]
+
+    def _drain_socket(self) -> bool:
+        if self._sock is None:
+            return False
+
+        got_data = False
+        while True:
+            try:
+                data = self._sock.recv(4096)
+                if not data:
+                    print(f"[tcp-client] disconnected from {self._host}:{self._port}")
+                    self._close_socket()
+                    return False
+                self._buf += data.decode("utf-8", errors="ignore")
+                got_data = True
+            except BlockingIOError:
+                break
+            except OSError:
+                self._close_socket()
+                return False
+        return got_data
 
     def read_frame(self) -> Optional[EegFrame]:
         self._connect_if_needed()
         if self._sock is None:
             return None
 
-        try:
-            data = self._sock.recv(4096)
-            if not data:
-                print(f"[tcp-client] disconnected from {self._host}:{self._port}")
-                self._close_socket()
-                return None
-            self._buf += data.decode("utf-8", errors="ignore")
-        except socket.timeout:
-            return None
-        except OSError:
-            self._close_socket()
+        self._drain_socket()
+        packets = self._extract_all_packets()
+        if not packets:
             return None
 
-        packet = self._extract_packet()
-        if packet is None:
-            return None
-
-        metrics = _parse_sod_packet(packet)
-        if not metrics:
-            return None
-
-        return EegFrame(ts=time.time(), source="tcp_client", metrics=metrics)
+        # 丢弃旧包，仅保留本周期最后一个结构完整且可解析的包
+        for packet in reversed(packets):
+            metrics = _parse_sod_packet(packet)
+            if metrics:
+                return EegFrame(ts=time.time(), source="tcp_client", metrics=metrics)
+        return None
 
 
 class LslAdapter(BaseAdapter):
