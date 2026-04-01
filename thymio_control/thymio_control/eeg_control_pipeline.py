@@ -269,6 +269,12 @@ class TcpClientJsonAdapter(BaseAdapter):
             if end < 0:
                 return packets
 
+            # If there's another SOD before this EOD, we should discard the garbage before it.
+            next_sod = self._buf.find("SOD", 3, end)
+            if next_sod > 0:
+                self._buf = self._buf[next_sod:]
+                continue
+
             packets.append(self._buf[: end + 3])
             self._buf = self._buf[end + 3 :]
 
@@ -555,6 +561,8 @@ def main() -> int:
     hz = float(args.hz)
     period = 1.0 / max(1.0, hz)
 
+    is_polling_adapter = isinstance(adapter, (MockAdapter, KeyboardAdapter))
+
     try:
         while True:
             frame = adapter.read_frame()
@@ -566,8 +574,14 @@ def main() -> int:
                 last_ts = time.time()
                 if args.verbose:
                     print(f"[eeg-pipeline] sent {intents}")
-            else:
-                time.sleep(period)
+                
+                if is_polling_adapter:
+                    time.sleep(period)
+                    continue
+
+            if not is_polling_adapter:
+                # Polling interval of 2ms gives <2ms delay for network adapters
+                time.sleep(0.002)
     except KeyboardInterrupt:
         pass
 
