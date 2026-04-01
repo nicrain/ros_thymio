@@ -210,6 +210,8 @@ class EegControlNode(Node):
 				command_linear_x = float(twist.linear.x)
 				command_angular_z = float(twist.angular.z)
 				self.pub.publish(twist)
+				self.last_mode = "movement"
+				self.last_twist = twist
 				self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 				analysis = {
 					"ts": frame.ts,
@@ -271,6 +273,7 @@ class EegControlNode(Node):
 				"command_linear_x": command_linear_x,
 				"command_angular_z": command_angular_z,
 			}
+			self.last_mode = "intents"
 			self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
 			if self.analysis_verbose:
 				self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
@@ -317,8 +320,11 @@ class EegControlNode(Node):
 			self.pub.publish(Twist())
 			return
 
-		twist = self._intents_to_twist(self.last_intents)
-		self.pub.publish(twist)
+		if getattr(self, "last_mode", "intents") == "movement":
+			self.pub.publish(getattr(self, "last_twist", Twist()))
+		else:
+			twist = self._intents_to_twist(self.last_intents)
+			self.pub.publish(twist)
 
 	def _intents_to_twist(self, intents) -> Twist:
 		speed_intent = clip01(float(intents.get("speed_intent", 0.0)))
