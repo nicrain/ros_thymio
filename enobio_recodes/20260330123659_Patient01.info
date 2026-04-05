@@ -1,0 +1,49 @@
+StartDate (first EEG timestamp): 1774867019766
+Device class: Enobio20
+Device MAC: 00:07:80:64:EB:85
+NIC version: v1.4.10
+Operative system: Windows
+Firmware version: 1213
+Line filter status: OFF
+Additional channel status: OFF
+EOG correction status: OFF
+
+Total number of channels: 20
+Number of EEG channels: 20
+Number of records of EEG: 12333
+Number of packets lost: 0(0.00%)
+EEG sampling rate: 500 Samples/second
+EEG units: nV
+EEG montage:
+	Channel 1: P7
+	Channel 2: P4
+	Channel 3: Cz
+	Channel 4: Pz
+	Channel 5: P3
+	Channel 6: P8
+	Channel 7: O1
+	Channel 8: O2
+	Channel 9: T8
+	Channel 10: F8
+	Channel 11: C4
+	Channel 12: F4
+	Channel 13: Fp2
+	Channel 14: Fz
+	Channel 15: C3
+	Channel 16: F3
+	Channel 17: Fp1
+	Channel 18: T7
+	Channel 19: F7
+	Channel 20: EXT
+
+Trigger information:
+	Code	Description
+	1	EOG Start
+	2	EOG Finish
+	3	Baseline Start
+	4	Baseline Finish
+	5	Trial Start
+	6	Rest Start
+	7	Pause
+	8	Abort
+	9	
