@@ -42,11 +42,11 @@
 ### 📌 需求 2: TCP 模式控制字段扩展 (Feature Field Control)
 **背景**：现有的 TCP 控制仅使用了 JSON/数据包中的 `movement` 字段。现需增加对 `feature` 字段（数据包中按分隔符拆分的第 4 个字段，即 index 3）的支持。这部分改动最小，作为热身任务首先执行。
 
-- [ ] **Task 2.1: TCP 消息解析升级**
+- [x] **Task 2.1: TCP 消息解析升级**
   - **位置**: 优先修改 `eeg_control_pipeline.py` 中现有 TCP 解析逻辑；仅当上游桥接脚本已固定输出同一协议时，才同步调整 `tools/bridges/wsl_enobio_bridge.py`。
   - **逻辑**: 明确以“分隔后第 4 段字段”为 `feature` 来源，即 index `3`。解析结果必须是 `float`。若字段缺失、索引越界或无法转换为数值，应抛出可区分的异常（建议 `ValueError` 或 `IndexError`），不能返回伪造默认值。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_tcp_parser.py` 中编写 `test_tcp_feature_extraction()`。Mock 传入一段完整的 TCP 字符串，`assert` 解析函数返回的 `feature` 浮点数符合预期；再补一个缺字段或越界样例，`assert` 触发预期异常。
-- [ ] **Task 2.2: 增加控制模式配置**
+- [x] **Task 2.2: 增加控制模式配置**
   - **位置**: `experiment_config.yaml`
   - **逻辑**: 新增顶层配置键 `tcp_control_mode: "movement" | "feature"`。若未显式配置，默认保持 `movement` 以兼容旧行为。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_config_loader.py` 中编写用例，读取该 YAML 文件，`assert` 加载出的 `tcp_control_mode` 存在且属于允许取值集合。

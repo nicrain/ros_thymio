@@ -1,0 +1,1 @@
+"""pytest package for thymio_control."""

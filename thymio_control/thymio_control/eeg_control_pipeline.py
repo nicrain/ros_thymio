@@ -69,6 +69,11 @@ def _parse_sod_packet(packet: str) -> Dict[str, float]:
     except Exception:
         return {}
 
+    try:
+        feature = extract_tcp_feature(packet)
+    except (IndexError, ValueError):
+        return {}
+
     expected_len = 5 + feature_count
     if len(parts) < expected_len:
         return {}
@@ -77,6 +82,7 @@ def _parse_sod_packet(packet: str) -> Dict[str, float]:
         "packet_no": float(packet_no),
         "feature_count": float(feature_count),
         "movement": movement,
+        "feature": feature,
     }
 
     feature_values = parts[3 : 3 + feature_count]
@@ -100,6 +106,33 @@ def _parse_sod_packet(packet: str) -> Dict[str, float]:
         metrics["feature_value"] = metrics["feature_1"]
 
     return metrics
+
+
+def extract_tcp_feature(packet: str) -> float:
+    """从 SOD/TCP 数据包中严格提取第 4 个字段作为 feature。
+
+    该函数用于单元测试和上游协议兼容验证：
+    - 只接受完整的 SOD...EOD 包
+    - 只提取分隔后的 index 3 字段
+    - 字段缺失、越界或不可转换为数值时直接抛出异常
+    """
+
+    packet = packet.strip()
+    if not packet.startswith("SOD") or not packet.endswith("EOD"):
+        raise ValueError("TCP packet must start with SOD and end with EOD")
+
+    body = packet[3:-3].strip()
+    if not body:
+        raise ValueError("TCP packet payload is empty")
+
+    parts = [part.strip() for part in body.split(";")]
+    if len(parts) <= 3:
+        raise IndexError("TCP packet does not contain feature field at index 3")
+
+    try:
+        return float(parts[3])
+    except ValueError as exc:
+        raise ValueError(f"TCP feature field at index 3 is not numeric: {parts[3]!r}") from exc
 
 
 class MockAdapter(BaseAdapter):
