@@ -24,6 +24,8 @@ try:
 except ImportError:
     yaml = None
 
+from thymio_control.enobio_file_reader import EnobioFileReader
+
 try:
     from geometry_msgs.msg import Twist  # type: ignore
 except ImportError:
@@ -524,6 +526,60 @@ def compute_pipeline_feature(raw_data: Any, selected_channels: Sequence[int], al
     if algorithm is None:
         raise ValueError(f"Unsupported pipeline algorithm: {algorithm_name}")
     return float(algorithm(filtered_data))
+
+
+class OfflineFilePipeline:
+    """End-to-end pipeline for offline Enobio recordings.
+
+    It connects the file reader, dynamic feature pipeline, and feature-to-Twist
+    mapping in a single deterministic runner used by integration tests.
+    """
+
+    def __init__(
+        self,
+        *,
+        info_path: str,
+        easy_path: str,
+        pipeline_config: Dict[str, Any],
+        max_forward_speed: float = 0.2,
+        turn_angular_speed: float = 1.2,
+        steer_deadzone: float = 0.1,
+    ) -> None:
+        source_type = str(pipeline_config.get("source_type", "")).strip()
+        if source_type != "file":
+            raise ValueError("OfflineFilePipeline requires pipeline_config.source_type == 'file'")
+
+        self.reader = EnobioFileReader(info_path, easy_path)
+        self.selected_channels = list(pipeline_config.get("selected_channels", []))
+        self.algorithm_name = str(pipeline_config.get("algorithm", "")).strip()
+        self.max_forward_speed = float(max_forward_speed)
+        self.turn_angular_speed = float(turn_angular_speed)
+        self.steer_deadzone = float(steer_deadzone)
+
+    def iter_twists(self, *, limit: Optional[int] = None) -> Iterator[Twist]:
+        metadata = self.reader.read_info()
+        samples = self.reader.read_easy_samples()
+
+        produced = 0
+        for sample in samples:
+            if len(sample) < metadata.channels:
+                raise ValueError(
+                    f"Enobio sample has {len(sample)} values but metadata declares {metadata.channels} channels"
+                )
+
+            channel_major_data = [[sample[index]] for index in range(metadata.channels)]
+            feature = compute_pipeline_feature(channel_major_data, self.selected_channels, self.algorithm_name)
+            twist = feature_to_twist(
+                feature,
+                max_forward_speed=self.max_forward_speed,
+                turn_angular_speed=self.turn_angular_speed,
+                steer_deadzone=self.steer_deadzone,
+            )
+            yield twist
+
+            produced += 1
+            if limit is not None and produced >= limit:
+                break
 
 
 class Policy:
