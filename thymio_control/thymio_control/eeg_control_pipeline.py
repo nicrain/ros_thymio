@@ -14,10 +14,10 @@ import argparse
 import json
 import math
 import socket
-import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Sequence
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, Optional, Sequence
 
 try:
     import yaml
@@ -652,6 +652,48 @@ def load_yaml_config(path: str) -> Dict[str, Any]:
     return obj
 
 
+def extract_pipeline_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    pipeline_cfg = cfg.get("pipeline_config") if isinstance(cfg, dict) else None
+    if not isinstance(pipeline_cfg, dict):
+        pipeline_cfg = {}
+
+    selected_channels = pipeline_cfg.get("selected_channels")
+    if not isinstance(selected_channels, list) or not selected_channels:
+        selected_channels = [0, 1, 2]
+
+    try:
+        selected_channels = [int(index) for index in selected_channels]
+    except Exception:
+        selected_channels = [0, 1, 2]
+
+    return {
+        "source_type": str(pipeline_cfg.get("source_type", "tcp")).strip() or "tcp",
+        "selected_channels": selected_channels,
+        "algorithm": str(pipeline_cfg.get("algorithm", "theta_beta_ratio")).strip() or "theta_beta_ratio",
+        "info_path": str(pipeline_cfg.get("info_path", "")).strip(),
+        "easy_path": str(pipeline_cfg.get("easy_path", "")).strip(),
+        "realtime": bool(pipeline_cfg.get("realtime", False)),
+    }
+
+
+def resolve_pipeline_file_paths(pipeline_config: Dict[str, Any], config_path: str = "") -> tuple[str, str]:
+    repo_root = Path(__file__).resolve().parents[2]
+    config_dir = Path(config_path).resolve().parent if config_path else repo_root
+    default_info = repo_root / "enobio_recodes" / "20260330123659_Patient01.info"
+    default_easy = repo_root / "enobio_recodes" / "20260330123659_Patient01.easy"
+
+    def _resolve(raw_path: str, default_path: Path) -> str:
+        candidate = Path(raw_path).expanduser() if raw_path else default_path
+        if not candidate.is_absolute():
+            candidate = config_dir / candidate
+        return str(candidate.resolve())
+
+    return _resolve(str(pipeline_config.get("info_path", "")), default_info), _resolve(
+        str(pipeline_config.get("easy_path", "")),
+        default_easy,
+    )
+
+
 def flatten_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """把分层配置展开成 argparse 同名键。"""
 
@@ -723,10 +765,30 @@ def build_adapter(args: Any) -> BaseAdapter:
     raise RuntimeError(f"Unsupported input mode: {args.input}")
 
 
+def run_offline_file_pipeline(args: argparse.Namespace, pipeline_config: Dict[str, Any], config_path: str = "") -> int:
+    info_path, easy_path = resolve_pipeline_file_paths(pipeline_config, config_path)
+    pipeline = OfflineFilePipeline(
+        info_path=info_path,
+        easy_path=easy_path,
+        pipeline_config=pipeline_config,
+        max_forward_speed=float(getattr(args, "max_forward_speed", 0.2)),
+        turn_angular_speed=float(getattr(args, "turn_angular_speed", 1.2)),
+        steer_deadzone=float(getattr(args, "steer_deadzone", 0.1)),
+    )
+
+    for twist in pipeline.iter_twists():
+        if getattr(args, "verbose", False):
+            print(f"[offline-file] linear_x={twist.linear.x:.3f} angular_z={twist.angular.z:.3f}")
+        else:
+            print(json.dumps({"linear_x": twist.linear.x, "angular_z": twist.angular.z}))
+
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
-    parser.add_argument("--input", choices=["mock", "tcp", "tcp_client", "lsl"], default="mock")
+    parser.add_argument("--input", choices=["mock", "tcp", "tcp_client", "lsl", "file"], default="mock")
     parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
 
     parser.add_argument("--tcp-host", default="0.0.0.0", help="TCP server bind host")
@@ -745,6 +807,7 @@ def main() -> int:
     parser.add_argument("--hz", type=float, default=20.0, help="Output max rate")
     parser.add_argument("--verbose", action="store_true", help="Print feature and output details")
     args = parser.parse_args()
+    cfg: Dict[str, Any] = {}
 
     if args.config:
         if yaml is None:
@@ -757,13 +820,20 @@ def main() -> int:
             print(f"ERROR: cannot load config: {e}")
             return 1
 
+    pipeline_config = extract_pipeline_config(cfg)
+    if args.input == "file" or pipeline_config.get("source_type") == "file":
+        try:
+            return run_offline_file_pipeline(args, pipeline_config, args.config)
+        except Exception as e:
+            print(f"ERROR: cannot run offline file pipeline: {e}")
+            return 1
+
     adapter = build_adapter(args)
     policy = POLICIES[args.policy]()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.udp_host, int(args.udp_port))
 
-    last_ts = time.time()
     hz = float(args.hz)
     period = 1.0 / max(1.0, hz)
 
@@ -777,7 +847,6 @@ def main() -> int:
                 intents = policy.compute_intents(feats)
                 payload = json.dumps(intents).encode()
                 sock.sendto(payload, target)
-                last_ts = time.time()
                 if args.verbose:
                     print(f"[eeg-pipeline] sent {intents}")
                 
