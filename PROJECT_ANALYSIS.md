@@ -72,7 +72,7 @@
 ### 📌 需求 1: Enobio 离线文件回放模式 (Offline File Playback)
 **背景**：利用 `enobio_recodes/` 下成对出现的 `.info` (配置) 和 `.easy` (时间序列数据) 模拟实时流。
 
-- [ ] **Task 1.1: 创建 EnobioFileReader 动态解析模块**
+- [x] **Task 1.1: 创建 EnobioFileReader 动态解析模块**
   - **位置**: 新建 `thymio_control/thymio_control/enobio_file_reader.py`。
   - **逻辑**: 解析 `.info` 提取采样率和 EEG 通道数；读取 `.easy`。如果文件格式不完整或关键字段缺失，应抛出明确异常，并保留原始错误上下文，方便定位录制文件问题。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_enobio_file_reader.py` 中编写测试。在 `test/mock_data/` 目录下伪造一个极小的 `.info` 和 `.easy` 文件。测试解析模块能否正确提取 `Channels` 和 `Sample Rate`（`assert rate == 250` 等），并补一个缺失字段样例。
