@@ -65,7 +65,7 @@
   - **位置**: `eeg_control_pipeline.py`
   - **逻辑**: 获取全量数据数组后，第一时间执行切片过滤 `filtered_data = raw_data[selected_channels]`。然后通过字典或类映射动态实例化 `algorithm` 对应的计算函数。若通道索引越界，必须立即抛出异常；若算法名未注册，也必须抛出异常，而不是退回到默认算法。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_dynamic_pipeline.py` 中编写测试。构建一个包含 20 个通道随机数据的 mock numpy 数组。加载配置后，`assert` 程序能准确切片出 `selected_channels` 并算出正确的 `theta_beta_ratio` 标量值。**必须编写一个 `test_channel_out_of_bounds()` 验证在 `selected_channels` 配置错误（如索引超过 19）时，系统抛出明确异常而不是静默崩溃。** 同时补一个未注册算法名的失败测试。
-- [ ] **Task 3.3: 集成 LSL 接收流 (可选依赖测试)**
+- [x] **Task 3.3: 集成 LSL 接收流 (可选依赖测试)**
   - **位置**: 在 `eeg_control_pipeline.py` 中新增 LSL Adapter，依赖 `pylsl`。
   - **验证策略 (Validation)**: 编写 `test_lsl_adapter.py`。启动一个本地的 mock `pylsl.StreamOutlet` 发送假数据，验证 Adapter 的 `pull_sample` 能否稳定读取数据流（可通过 pytest 设置超时机制）。如果环境未安装 `pylsl`，测试应明确跳过并说明原因，而不是假通过。
 
