@@ -50,7 +50,7 @@
   - **位置**: `experiment_config.yaml`
   - **逻辑**: 新增顶层配置键 `tcp_control_mode: "movement" | "feature"`。若未显式配置，默认保持 `movement` 以兼容旧行为。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_config_loader.py` 中编写用例，读取该 YAML 文件，`assert` 加载出的 `tcp_control_mode` 存在且属于允许取值集合。
-- [ ] **Task 2.3: 实现 Feature 到 Twist 的映射策略**
+- [x] **Task 2.3: 实现 Feature 到 Twist 的映射策略**
   - **位置**: `eeg_control_pipeline.py` 中的控制策略生成部分。
   - **逻辑**: 如果 `tcp_control_mode` 为 `feature`，将提取出的标量值转换为 `geometry_msgs/Twist` (`cmd_vel`) 发送给小车。映射公式需要是单一、可测试、可配置的函数，且结果必须经过速度上限与转向上限裁剪；空帧情况下必须复用 `last_mode` 和 `last_twist`，不能回退到全速默认值。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_feature_mapping.py` 编写测试，Mock 输入 `feature = 0.1` 和 `feature = 0.9`，调用策略函数后，`assert` 生成的 `cmd_vel.linear.x` 和 `.angular.z` 符合映射公式和阈值限制；再补一个空帧或异常输入样例，验证回退行为。

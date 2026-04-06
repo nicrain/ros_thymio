@@ -24,6 +24,20 @@ try:
 except ImportError:
     yaml = None
 
+try:
+    from geometry_msgs.msg import Twist  # type: ignore
+except ImportError:
+    @dataclass
+    class _Vector3:
+        x: float = 0.0
+        y: float = 0.0
+        z: float = 0.0
+
+    class Twist:  # type: ignore
+        def __init__(self) -> None:
+            self.linear = _Vector3()
+            self.angular = _Vector3()
+
 
 @dataclass
 class EegFrame:
@@ -133,6 +147,52 @@ def extract_tcp_feature(packet: str) -> float:
         return float(parts[3])
     except ValueError as exc:
         raise ValueError(f"TCP feature field at index 3 is not numeric: {parts[3]!r}") from exc
+
+
+def _clone_twist(twist: Twist) -> Twist:
+    cloned = Twist()
+    cloned.linear.x = float(getattr(twist.linear, "x", 0.0))
+    cloned.linear.y = float(getattr(twist.linear, "y", 0.0))
+    cloned.linear.z = float(getattr(twist.linear, "z", 0.0))
+    cloned.angular.x = float(getattr(twist.angular, "x", 0.0))
+    cloned.angular.y = float(getattr(twist.angular, "y", 0.0))
+    cloned.angular.z = float(getattr(twist.angular, "z", 0.0))
+    return cloned
+
+
+def feature_to_twist(
+    feature: Optional[float],
+    *,
+    max_forward_speed: float = 0.2,
+    turn_angular_speed: float = 1.2,
+    steer_deadzone: float = 0.1,
+    last_twist: Optional[Twist] = None,
+) -> Twist:
+    """把 TCP feature 标量映射为 Twist。
+
+    映射约定：
+    - feature 被裁剪到 [0, 1]
+    - linear.x = max_forward_speed * feature
+    - angular.z 以 0.5 为中性点，向两侧线性映射，并受 deadzone 控制
+    - feature 缺失或不可转换时，优先回退到 last_twist
+    """
+
+    try:
+        value = clip01(float(feature))
+    except Exception:
+        if last_twist is not None:
+            return _clone_twist(last_twist)
+        return Twist()
+
+    twist = Twist()
+    twist.linear.x = max(0.0, min(float(max_forward_speed), float(max_forward_speed) * value))
+
+    steer = (value - 0.5) * 2.0
+    if abs(steer) >= float(steer_deadzone):
+        angular = float(turn_angular_speed) * steer
+        twist.angular.z = max(-float(turn_angular_speed), min(float(turn_angular_speed), angular))
+
+    return twist
 
 
 class MockAdapter(BaseAdapter):

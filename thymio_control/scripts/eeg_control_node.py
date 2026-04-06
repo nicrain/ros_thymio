@@ -18,6 +18,7 @@ from thymio_control.eeg_control_pipeline import (
 	build_adapter,
 	clip01,
 	enrich_features,
+	feature_to_twist,
 )
 
 
@@ -48,6 +49,7 @@ class EegControlNode(Node):
 		# 输入与策略参数
 		self.declare_parameter("input", "mock")
 		self.declare_parameter("policy", "focus")
+		self.declare_parameter("tcp_control_mode", "movement")
 		self.declare_parameter("tcp_host", "0.0.0.0")
 		self.declare_parameter("tcp_port", 6001)
 		self.declare_parameter("lsl_stream_type", "EEG")
@@ -181,8 +183,11 @@ class EegControlNode(Node):
 	def _tick(self) -> None:
 		frame = self.adapter.read_frame()
 		if frame is not None:
+			tcp_control_mode = str(self.get_parameter("tcp_control_mode").value).strip() or "movement"
 			movement_value = frame.metrics.get("movement")
 			has_movement = isinstance(movement_value, (int, float))
+			feature_value = frame.metrics.get("feature")
+			has_feature = isinstance(feature_value, (int, float))
 			has_band_features = all(key in frame.metrics for key in ("alpha", "theta", "beta"))
 			features = enrich_features(frame.metrics) if has_band_features else dict(frame.metrics)
 			if has_band_features:
@@ -193,6 +198,69 @@ class EegControlNode(Node):
 			control_mode = "band_features"
 			command_linear_x = 0.0
 			command_angular_z = 0.0
+			if tcp_control_mode == "feature" and has_feature:
+				control_mode = "feature"
+				twist = feature_to_twist(
+					float(feature_value),
+					max_forward_speed=self.max_forward_speed,
+					turn_angular_speed=self.turn_angular_speed,
+					steer_deadzone=self.steer_deadzone,
+					last_twist=getattr(self, "last_twist", Twist()),
+				)
+				command_linear_x = float(twist.linear.x)
+				command_angular_z = float(twist.angular.z)
+				self.pub.publish(twist)
+				self.last_mode = "feature"
+				self.last_twist = twist
+				analysis = {
+					"ts": frame.ts,
+					"source": frame.source,
+					"metrics": frame.metrics,
+					"features": features,
+					"intents": self.last_intents,
+					"control_mode": control_mode,
+					"command_linear_x": command_linear_x,
+					"command_angular_z": command_angular_z,
+				}
+				self.analysis_pub.publish(String(data=json.dumps(analysis, ensure_ascii=False)))
+				if self.analysis_verbose:
+					self.get_logger().info(json.dumps(analysis, ensure_ascii=False))
+				if self._csv_writer is not None:
+					row = {
+						"ts": frame.ts,
+						"source": frame.source,
+						"control_mode": control_mode,
+						"packet_no": frame.metrics.get("packet_no", 0.0),
+						"feature_count": frame.metrics.get("feature_count", 0.0),
+						"movement": frame.metrics.get("movement", 0.0),
+						"artifact": frame.metrics.get("artifact", 0.0),
+						"current_y_unused": frame.metrics.get("current_y_unused", -1.0),
+						"metrics_json": json.dumps(frame.metrics, ensure_ascii=False, sort_keys=True),
+						"command_linear_x": command_linear_x,
+						"command_angular_z": command_angular_z,
+						"speed_intent": self.last_intents.get("speed_intent", 0.5),
+						"steer_intent": self.last_intents.get("steer_intent", 0.5),
+					}
+					self._csv_writer.writerow(row)
+					self._csv_file.flush()
+				if self.verbose:
+					self.get_logger().info(
+						(
+							"src=%s mode=%s packet_no=%.0f feature_count=%.0f movement=%.3f artifact=%.3f "
+							"cmd_x=%.3f cmd_z=%.3f"
+						)
+						% (
+							frame.source,
+							control_mode,
+							frame.metrics.get("packet_no", 0.0),
+							frame.metrics.get("feature_count", 0.0),
+							frame.metrics.get("movement", 0.0),
+							frame.metrics.get("artifact", 0.0),
+							command_linear_x,
+							command_angular_z,
+						)
+					)
+				return
 			if has_movement:
 				control_mode = "movement"
 				movement = float(movement_value)
@@ -320,7 +388,7 @@ class EegControlNode(Node):
 			self.pub.publish(Twist())
 			return
 
-		if getattr(self, "last_mode", "intents") == "movement":
+		if getattr(self, "last_mode", "intents") in ("movement", "feature"):
 			self.pub.publish(getattr(self, "last_twist", Twist()))
 		else:
 			twist = self._intents_to_twist(self.last_intents)
