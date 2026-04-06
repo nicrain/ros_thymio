@@ -61,7 +61,7 @@
 - [x] **Task 3.1: YAML 定义高度动态化管线**
   - **位置**: `experiment_config.yaml`
   - **逻辑**: 定义 `pipeline_config`，包含 `source_type` ("lsl"/"tcp"/"file")、`selected_channels` (如 `[0, 2, 5]`)、`algorithm` (如 `"theta_beta_ratio"`)。`selected_channels` 的元素必须是从 `0` 开始的整数索引，算法名必须对应后续工厂中的注册键。
-- [ ] **Task 3.2: 实现“特征提取器”策略工厂**
+- [x] **Task 3.2: 实现“特征提取器”策略工厂**
   - **位置**: `eeg_control_pipeline.py`
   - **逻辑**: 获取全量数据数组后，第一时间执行切片过滤 `filtered_data = raw_data[selected_channels]`。然后通过字典或类映射动态实例化 `algorithm` 对应的计算函数。若通道索引越界，必须立即抛出异常；若算法名未注册，也必须抛出异常，而不是退回到默认算法。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_dynamic_pipeline.py` 中编写测试。构建一个包含 20 个通道随机数据的 mock numpy 数组。加载配置后，`assert` 程序能准确切片出 `selected_channels` 并算出正确的 `theta_beta_ratio` 标量值。**必须编写一个 `test_channel_out_of_bounds()` 验证在 `selected_channels` 配置错误（如索引超过 19）时，系统抛出明确异常而不是静默崩溃。** 同时补一个未注册算法名的失败测试。

@@ -17,7 +17,7 @@ import socket
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Sequence
 
 try:
     import yaml
@@ -467,6 +467,63 @@ def enrich_features(metrics: Dict[str, float]) -> Dict[str, float]:
     f["beta_alpha_theta"] = safe_div(beta, alpha + theta)
     f["alpha_asym"] = safe_div(right_alpha - left_alpha, right_alpha + left_alpha)
     return f
+
+
+def _sequence_mean(values: Any) -> float:
+    try:
+        iterator = iter(values)
+    except TypeError:
+        return float(values)
+
+    total = 0.0
+    count = 0
+    for value in iterator:
+        total += float(value)
+        count += 1
+
+    if count == 0:
+        raise ValueError("cannot compute mean of an empty sequence")
+
+    return total / count
+
+
+def _select_channels(raw_data: Any, selected_channels: Sequence[int]) -> Any:
+    if not selected_channels:
+        raise ValueError("selected_channels must not be empty")
+
+    total_channels = len(raw_data)
+    for index in selected_channels:
+        if index < 0 or index >= total_channels:
+            raise IndexError(f"selected channel index out of bounds: {index}")
+
+    try:
+        return raw_data[list(selected_channels)]
+    except Exception:
+        return [raw_data[index] for index in selected_channels]
+
+
+def _theta_beta_ratio_algorithm(filtered_data: Any) -> float:
+    if len(filtered_data) < 2:
+        raise ValueError("theta_beta_ratio requires at least two selected channels")
+
+    theta_channel = filtered_data[0]
+    beta_channel = filtered_data[1]
+    return safe_div(_sequence_mean(theta_channel), _sequence_mean(beta_channel))
+
+
+PIPELINE_ALGORITHMS: Dict[str, Callable[[Any], float]] = {
+    "theta_beta_ratio": _theta_beta_ratio_algorithm,
+}
+
+
+def compute_pipeline_feature(raw_data: Any, selected_channels: Sequence[int], algorithm_name: str) -> float:
+    """按配置切片通道并动态执行特征算法。"""
+
+    filtered_data = _select_channels(raw_data, selected_channels)
+    algorithm = PIPELINE_ALGORITHMS.get(str(algorithm_name))
+    if algorithm is None:
+        raise ValueError(f"Unsupported pipeline algorithm: {algorithm_name}")
+    return float(algorithm(filtered_data))
 
 
 class Policy:
