@@ -58,7 +58,7 @@
 ### 📌 需求 3: LSL 实时控制与高度动态化处理管线 (LSL & Dynamic Pipeline)
 **背景**：无论哪种数据源（LSL/TCP/File），其实际传输的通道数不定，我们需要用于计算的通道不定，提取的特征算法也不定。
 
-- [ ] **Task 3.1: YAML 定义高度动态化管线**
+- [x] **Task 3.1: YAML 定义高度动态化管线**
   - **位置**: `experiment_config.yaml`
   - **逻辑**: 定义 `pipeline_config`，包含 `source_type` ("lsl"/"tcp"/"file")、`selected_channels` (如 `[0, 2, 5]`)、`algorithm` (如 `"theta_beta_ratio"`)。`selected_channels` 的元素必须是从 `0` 开始的整数索引，算法名必须对应后续工厂中的注册键。
 - [ ] **Task 3.2: 实现“特征提取器”策略工厂**

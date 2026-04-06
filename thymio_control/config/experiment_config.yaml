@@ -3,6 +3,11 @@
 
 tcp_control_mode: movement
 
+pipeline_config:
+  source_type: tcp
+  selected_channels: [0, 1, 2]
+  algorithm: theta_beta_ratio
+
 adapter:
   input: mock
   tcp_host: 0.0.0.0
