@@ -34,3 +34,25 @@ def test_enobio_file_reader_raises_on_missing_metadata(tmp_path: Path):
 
     with pytest.raises(ValueError):
         reader.read_info()
+
+
+def test_enobio_replay_publisher_uses_sampling_interval():
+    info_path, easy_path = _mock_paths()
+    reader = EnobioFileReader(info_path, easy_path)
+    sleeps: list[float] = []
+
+    samples = list(reader.iter_realtime_samples(sleep_fn=sleeps.append))
+
+    assert len(samples) == 2
+    assert sleeps == [pytest.approx(1.0 / 500.0)]
+
+
+def test_enobio_replay_publisher_fast_mode_skips_sleep():
+    info_path, easy_path = _mock_paths()
+    reader = EnobioFileReader(info_path, easy_path)
+    sleeps: list[float] = []
+
+    samples = list(reader.iter_realtime_samples(realtime=False, sleep_fn=sleeps.append))
+
+    assert len(samples) == 2
+    assert sleeps == []

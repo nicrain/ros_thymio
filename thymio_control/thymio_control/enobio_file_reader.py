@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from typing import Callable, Iterable, Iterator, List, Sequence
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,24 @@ class EnobioFileReader:
     def iter_easy_samples(self) -> Iterable[List[float]]:
         for sample in self.read_easy_samples():
             yield sample
+
+    def iter_realtime_samples(
+        self,
+        *,
+        realtime: bool = True,
+        sleep_fn: Callable[[float], None] | None = None,
+    ) -> Iterator[List[float]]:
+        """Yield samples with an optional sampling-rate-based delay between rows."""
+
+        metadata = self.read_info()
+        delay = 1.0 / float(metadata.sample_rate)
+        sleep_callable = sleep_fn or __import__("time").sleep
+
+        samples = self.read_easy_samples()
+        for index, sample in enumerate(samples):
+            yield sample
+            if realtime and index < len(samples) - 1:
+                sleep_callable(delay)
 
     @staticmethod
     def _extract_first_int(content: str, patterns: list[str]) -> int:

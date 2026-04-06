@@ -76,7 +76,7 @@
   - **位置**: 新建 `thymio_control/thymio_control/enobio_file_reader.py`。
   - **逻辑**: 解析 `.info` 提取采样率和 EEG 通道数；读取 `.easy`。如果文件格式不完整或关键字段缺失，应抛出明确异常，并保留原始错误上下文，方便定位录制文件问题。
   - **验证策略 (Validation)**: 在 `thymio_control/test/test_enobio_file_reader.py` 中编写测试。在 `test/mock_data/` 目录下伪造一个极小的 `.info` 和 `.easy` 文件。测试解析模块能否正确提取 `Channels` 和 `Sample Rate`（`assert rate == 250` 等），并补一个缺失字段样例。
-- [ ] **Task 1.2: 模拟实时流发布器**
+- [x] **Task 1.2: 模拟实时流发布器**
   - **位置**: 类似 Adapter 形式接入管线。
   - **逻辑**: 根据采样率按时间戳间隔逐行“喂”给下游。若调用方要求非实时模式，应支持以无 sleep 的方式快速回放，便于测试。
   - **验证策略 (Validation)**: 结合 `pytest-mock` 或简单的时间戳比对验证，测试模拟器产生的相邻两次 `yield` 或回调调用的时间间隔是否符合预期的采样率倒数（允许适当误差）。
