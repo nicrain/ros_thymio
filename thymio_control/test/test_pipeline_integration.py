@@ -71,7 +71,7 @@ def test_pipeline_integration_generates_twists_from_offline_file():
     assert twists
     assert len(twists) == 2
     for twist in twists:
-        assert 0.0 <= twist.linear.x <= 0.2
+        assert -0.151 <= twist.linear.x <= 0.2
         assert abs(twist.angular.z) <= 1.2
 
 

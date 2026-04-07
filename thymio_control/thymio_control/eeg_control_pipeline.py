@@ -173,26 +173,33 @@ def feature_to_twist(
     """把 TCP feature 标量映射为 Twist。
 
     映射约定：
-    - feature 被裁剪到 [-1, 1]
-    - 0 是中性点，正值表示前进/右转，负值表示后退/左转
-    - linear.x = max_forward_speed * feature
-    - angular.z = turn_angular_speed * feature，并受 deadzone 控制
+    - feature 按 movement 同样的离散阈值处理
+    - 0.0 < feature < 0.5: 前进
+    - 0.5 < feature < 1.0: 后退
+    - feature == 1.0: 原地右转
+    - 其他值: 停止
     - feature 缺失或不可转换时，优先回退到 last_twist
     """
 
     try:
-        value = max(-1.0, min(1.0, float(feature)))
+        value = float(feature)
     except Exception:
         if last_twist is not None:
             return _clone_twist(last_twist)
         return Twist()
 
     twist = Twist()
-    twist.linear.x = max(-float(max_forward_speed), min(float(max_forward_speed), float(max_forward_speed) * value))
 
-    if abs(value) >= float(steer_deadzone):
-        angular = float(turn_angular_speed) * value
-        twist.angular.z = max(-float(turn_angular_speed), min(float(turn_angular_speed), angular))
+    if 0.0 < value < 0.5:
+        twist.linear.x = float(max_forward_speed)
+    elif 0.5 < value < 1.0:
+        twist.linear.x = float(max_forward_speed) * -0.75
+    elif value == 1.0:
+        twist.angular.z = float(turn_angular_speed)
+    elif value < 0.0:
+        pass
+    else:
+        pass
 
     return twist
 
