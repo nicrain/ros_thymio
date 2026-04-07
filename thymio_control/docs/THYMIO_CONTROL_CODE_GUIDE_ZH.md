@@ -133,7 +133,7 @@ Windows 设备 SDK
 - EEG 封装：固定 `run_eeg=true`、`run_gaze=false`。
 - Gaze 封装：固定 `run_eeg=false`、`run_gaze=true`，并默认启 Tobii bridge。
 
-它们只是把参数传给 `experiment_core.launch.py`，没有额外控制逻辑。
+它们只是把参数传给 `experiment_core.launch.py`，没有额外控制逻辑。EEG 快捷入口还会默认关闭 `use_teleop`，这样 EEG 节点才不会被总入口里的条件挡掉。
 
 ### 4.3 `scripts/gaze_control_node.py`（UDP JSON -> Twist）
 

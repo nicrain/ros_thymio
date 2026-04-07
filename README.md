@@ -118,7 +118,7 @@ source install/setup.bash
 source install/setup.bash
 ```
 
-常见用法是通过 `thymio_control/launch/eeg_thymio.launch.py` 启动仿真或驱动。
+常见用法是通过 `thymio_control/launch/eeg_thymio.launch.py` 启动仿真或驱动。这个快捷入口默认会关闭 teleop，确保 EEG 节点会真正启动；如果你手动改过 `use_teleop`，EEG 节点会被条件抑制。
 
 ```bash
 ros2 launch thymio_control eeg_thymio.launch.py use_sim:=true use_gui:=true
