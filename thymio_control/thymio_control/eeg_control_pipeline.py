@@ -173,25 +173,25 @@ def feature_to_twist(
     """把 TCP feature 标量映射为 Twist。
 
     映射约定：
-    - feature 被裁剪到 [0, 1]
+    - feature 被裁剪到 [-1, 1]
+    - 0 是中性点，正值表示前进/右转，负值表示后退/左转
     - linear.x = max_forward_speed * feature
-    - angular.z 以 0.5 为中性点，向两侧线性映射，并受 deadzone 控制
+    - angular.z = turn_angular_speed * feature，并受 deadzone 控制
     - feature 缺失或不可转换时，优先回退到 last_twist
     """
 
     try:
-        value = clip01(float(feature))
+        value = max(-1.0, min(1.0, float(feature)))
     except Exception:
         if last_twist is not None:
             return _clone_twist(last_twist)
         return Twist()
 
     twist = Twist()
-    twist.linear.x = max(0.0, min(float(max_forward_speed), float(max_forward_speed) * value))
+    twist.linear.x = max(-float(max_forward_speed), min(float(max_forward_speed), float(max_forward_speed) * value))
 
-    steer = (value - 0.5) * 2.0
-    if abs(steer) >= float(steer_deadzone):
-        angular = float(turn_angular_speed) * steer
+    if abs(value) >= float(steer_deadzone):
+        angular = float(turn_angular_speed) * value
         twist.angular.z = max(-float(turn_angular_speed), min(float(turn_angular_speed), angular))
 
     return twist

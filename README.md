@@ -120,6 +120,16 @@ source install/setup.bash
 
 常见用法是通过 `thymio_control/launch/eeg_thymio.launch.py` 启动仿真或驱动。这个快捷入口默认会关闭 teleop，确保 EEG 节点会真正启动；如果你手动改过 `use_teleop`，EEG 节点会被条件抑制。
 
+注意：这个 launch 读取的是 `thymio_control/config/eeg_control_node.params.yaml`，不是 `experiment_config.yaml`。如果你想让 `eeg_thymio.launch.py` 下的 ROS2 节点切到 `feature`，要改前者里的 `tcp_control_mode` 和 `tcp_host` / `tcp_port`。
+
+### 入口与配置对照
+
+| 运行方式 | 入口文件 | 读取的配置 | 适合改的参数 |
+| --- | --- | --- | --- |
+| ROS2 EEG launch | `thymio_control/launch/eeg_thymio.launch.py` | `thymio_control/config/eeg_control_node.params.yaml` | `input`、`policy`、`tcp_control_mode`、`tcp_host`、`tcp_port`、`cmd_topic` |
+| ROS2 总编排 launch | `thymio_control/launch/experiment_core.launch.py` | `thymio_control/config/eeg_control_node.params.yaml` + `thymio_control/config/launch_args.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge` |
+| 统一 EEG pipeline CLI | `python3 -m thymio_control.eeg_control_pipeline` | `thymio_control/config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm`、`info_path`、`easy_path` |
+
 ```bash
 ros2 launch thymio_control eeg_thymio.launch.py use_sim:=true use_gui:=true
 ```
@@ -209,8 +219,6 @@ python3 thymio_control/scripts/eeg_control_node.py --ros-args --params-file thym
 推荐优先使用配置文件控制录制文件来源，因为这样可以同时固定 `selected_channels` 和 `algorithm`：
 
 ```yaml
-tcp_control_mode: movement
-
 pipeline_config:
   source_type: file
   info_path: enobio_recodes/20260330123659_Patient01.info
@@ -229,7 +237,7 @@ python3 -m thymio_control.eeg_control_pipeline --config thymio_control/config/ex
 python3 -m thymio_control.eeg_control_pipeline --config thymio_control/config/experiment_config.yaml --input file
 ```
 
-如果你希望在自定义配置中指定录音文件路径，建议使用如下字段：
+如果你希望在自定义配置中指定录音文件路径，建议保持 `experiment_config.yaml` 只放这一类 pipeline 字段：
 
 ```yaml
 pipeline_config:

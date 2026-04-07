@@ -1,8 +1,3 @@
-# EEG 实验配置示例
-# 注：命令行显式参数优先级高于本文件
-
-tcp_control_mode: movement
-
 pipeline_config:
   source_type: tcp_client
   selected_channels: [0, 1, 2]

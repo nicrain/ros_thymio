@@ -10,22 +10,29 @@ def _make_twist(linear_x: float = 0.0, angular_z: float = 0.0) -> Twist:
     return twist
 
 
-def test_feature_to_twist_low_value_maps_to_slow_left_turn():
-    twist = feature_to_twist(0.1, max_forward_speed=0.2, turn_angular_speed=1.2, steer_deadzone=0.05)
+def test_feature_to_twist_negative_value_maps_to_reverse_left_turn():
+    twist = feature_to_twist(-0.8, max_forward_speed=0.2, turn_angular_speed=1.2, steer_deadzone=0.05)
 
-    assert twist.linear.x == pytest.approx(0.02)
+    assert twist.linear.x == pytest.approx(-0.16)
     assert twist.angular.z == pytest.approx(-0.96)
     assert abs(twist.linear.x) <= 0.2
     assert abs(twist.angular.z) <= 1.2
 
 
-def test_feature_to_twist_high_value_maps_to_fast_right_turn():
-    twist = feature_to_twist(0.9, max_forward_speed=0.2, turn_angular_speed=1.2, steer_deadzone=0.05)
+def test_feature_to_twist_positive_value_maps_to_forward_right_turn():
+    twist = feature_to_twist(0.8, max_forward_speed=0.2, turn_angular_speed=1.2, steer_deadzone=0.05)
 
-    assert twist.linear.x == pytest.approx(0.18)
+    assert twist.linear.x == pytest.approx(0.16)
     assert twist.angular.z == pytest.approx(0.96)
     assert abs(twist.linear.x) <= 0.2
     assert abs(twist.angular.z) <= 1.2
+
+
+def test_feature_to_twist_zero_value_returns_stop():
+    twist = feature_to_twist(0.0, max_forward_speed=0.2, turn_angular_speed=1.2, steer_deadzone=0.05)
+
+    assert twist.linear.x == pytest.approx(0.0)
+    assert twist.angular.z == pytest.approx(0.0)
 
 
 def test_feature_to_twist_falls_back_to_last_twist_on_empty_input():

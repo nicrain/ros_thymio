@@ -23,14 +23,22 @@ def _validate_pipeline_config(config: dict) -> None:
         raise ValueError("pipeline_config.algorithm must be a non-empty string")
 
 
-def test_experiment_config_has_tcp_control_mode_and_pipeline_config():
+def test_experiment_config_has_pipeline_config_only():
     config_path = Path(__file__).resolve().parents[1] / "config" / "experiment_config.yaml"
 
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
 
-    assert config.get("tcp_control_mode") in {"movement", "feature"}
     _validate_pipeline_config(config)
+
+
+def test_eeg_launch_params_include_tcp_control_mode():
+    config_path = Path(__file__).resolve().parents[1] / "config" / "eeg_control_node.params.yaml"
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        text = handle.read()
+
+    assert "tcp_control_mode:" in text
 
 
 def test_pipeline_config_validation_rejects_bad_source_type():

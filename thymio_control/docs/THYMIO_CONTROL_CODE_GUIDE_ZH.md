@@ -135,6 +135,16 @@ Windows 设备 SDK
 
 它们只是把参数传给 `experiment_core.launch.py`，没有额外控制逻辑。EEG 快捷入口还会默认关闭 `use_teleop`，这样 EEG 节点才不会被总入口里的条件挡掉。
 
+补充一点：`eeg_thymio.launch.py` 读取的是 `config/eeg_control_node.params.yaml`；`config/experiment_config.yaml` 只用于 `python3 -m thymio_control.eeg_control_pipeline` 这条统一入口。也就是说，如果你是在 `ros2 launch thymio_control eeg_thymio.launch.py` 里调 `tcp_control_mode`，应该改前者，而不是后者。
+
+#### 一眼看懂
+
+| 运行方式 | 入口 | 读取配置 | 关键参数 |
+| --- | --- | --- | --- |
+| `ros2 launch thymio_control eeg_thymio.launch.py` | EEG 快捷 launch | `config/eeg_control_node.params.yaml` | `input`、`policy`、`tcp_control_mode`、`tcp_host`、`tcp_port`、`cmd_topic` |
+| `ros2 launch thymio_control experiment_core.launch.py` | 总编排 launch | `config/launch_args.yaml` + `config/eeg_control_node.params.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge` |
+| `python3 -m thymio_control.eeg_control_pipeline` | 统一 pipeline CLI | `config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm`、`info_path`、`easy_path` |
+
 ### 4.3 `scripts/gaze_control_node.py`（UDP JSON -> Twist）
 
 这是一个纯网关型节点，逻辑非常清晰：
