@@ -27,7 +27,7 @@ def _mock_paths() -> tuple[Path, Path]:
 def test_pipeline_config_defaults_and_default_file_path_resolution():
     pipeline_config = extract_pipeline_config({})
 
-    assert pipeline_config["source_type"] == "tcp"
+    assert pipeline_config["source_type"] == "tcp_client"
     assert pipeline_config["selected_channels"] == [0, 1, 2]
     assert pipeline_config["algorithm"] == "theta_beta_ratio"
 
@@ -78,7 +78,7 @@ def test_pipeline_integration_generates_twists_from_offline_file():
 def test_pipeline_integration_rejects_non_file_source_type():
     info_path, easy_path = _mock_paths()
     bad_config = _pipeline_config()
-    bad_config["source_type"] = "tcp"
+    bad_config["source_type"] = "tcp_client"
 
     with pytest.raises(ValueError):
         OfflineFilePipeline(

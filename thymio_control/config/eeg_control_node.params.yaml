@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
-    # NIC TCP server: 172.27.96.1:1234
-    # 如果需要回退到本地仿真，可改回 mock 或 tcp
+    # NIC TCP client: 172.27.96.1:1234
+    # 如果需要回退到本地仿真，可改回 mock 或 tcp_client
     input: tcp_client
     policy: focus
     tcp_host: 172.27.96.1

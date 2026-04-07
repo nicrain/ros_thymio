@@ -68,7 +68,7 @@ ros2 launch thymio_control gaze_thymio.launch.py
 
 ### 3.1 EEG 原生链路
 
-输入源（mock/tcp/tcp_client/lsl）
+输入源（mock/tcp_client/lsl）
 -> `thymio_control/eeg_control_pipeline.py` 产出意图
 -> `scripts/eeg_control_node.py` 转 Twist
 -> 发布到 `cmd_topic`（仿真一般是 `/model/thymio/cmd_vel`，实机一般是 `/cmd_vel`）
@@ -195,8 +195,7 @@ Windows 设备 SDK
 
 1. Adapter
 - `MockAdapter`
-- `TcpJsonAdapter`（作为 TCP server）
-- `TcpClientJsonAdapter`（连接外部 TCP server，支持 SOD...EOD 包解析）
+- `TcpClientJsonAdapter`（连接外部 TCP client 服务，支持 SOD...EOD 包解析）
 - `LslAdapter`
 - `KeyboardAdapter`（类存在，但 CLI choices 当前未暴露 keyboard 选项）
 

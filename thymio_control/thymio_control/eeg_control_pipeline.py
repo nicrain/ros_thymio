@@ -222,95 +222,6 @@ class MockAdapter(BaseAdapter):
         )
 
 
-class TcpJsonAdapter(BaseAdapter):
-    """从单个 TCP 客户端读取按行分隔的 JSON 帧。
-
-    字段可扩展，但至少需要一个数值型 EEG 指标。
-    典型载荷示例：
-      {"alpha": 10.2, "theta": 6.3, "beta": 8.7, "left_alpha": 4.8, "right_alpha": 5.4}
-    """
-
-    def __init__(self, host: str, port: int) -> None:
-        self._srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._srv.bind((host, port))
-        self._srv.listen(1)
-        self._srv.setblocking(False)
-
-        self._conn = None
-        self._addr = None
-        self._buf = ""
-
-    def _accept_if_needed(self) -> None:
-        if self._conn is not None:
-            return
-        try:
-            conn, addr = self._srv.accept()
-            conn.setblocking(False)
-            self._conn = conn
-            self._addr = addr
-            print(f"[tcp] client connected: {addr}")
-        except BlockingIOError:
-            pass
-
-    def _drain_socket(self) -> bool:
-        """排干当前周期内的所有可读字节，返回是否读取到新数据。"""
-        if self._conn is None:
-            return False
-
-        got_data = False
-        while True:
-            try:
-                data = self._conn.recv(4096)
-                if not data:
-                    print("[tcp] client disconnected")
-                    self._conn.close()
-                    self._conn = None
-                    self._addr = None
-                    self._buf = ""
-                    return False
-                self._buf += data.decode("utf-8", errors="ignore")
-                got_data = True
-            except BlockingIOError:
-                break
-            except OSError:
-                self._conn = None
-                self._addr = None
-                self._buf = ""
-                return False
-
-        # 避免无换行噪声无限增长
-        if "\n" not in self._buf and len(self._buf) > 65536:
-            self._buf = self._buf[-1024:]
-        return got_data
-
-    def read_frame(self) -> Optional[EegFrame]:
-        self._accept_if_needed()
-        if self._conn is None:
-            return None
-
-        self._drain_socket()
-
-        latest_metrics: Optional[Dict[str, float]] = None
-        while "\n" in self._buf:
-            line, self._buf = self._buf.split("\n", 1)
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-                metrics = {k: float(v) for k, v in obj.items() if isinstance(v, (int, float))}
-            except Exception:
-                continue
-            if metrics:
-                latest_metrics = metrics
-
-        if latest_metrics is None:
-            return None
-
-        return EegFrame(ts=time.time(), source="tcp", metrics=latest_metrics)
-
-
 class TcpClientJsonAdapter(BaseAdapter):
     """作为 TCP 客户端连接到外部 EEG 服务，并读取按行分隔的数据。"""
 
@@ -667,7 +578,7 @@ def extract_pipeline_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         selected_channels = [0, 1, 2]
 
     return {
-        "source_type": str(pipeline_cfg.get("source_type", "tcp")).strip() or "tcp",
+        "source_type": str(pipeline_cfg.get("source_type", "tcp_client")).strip() or "tcp_client",
         "selected_channels": selected_channels,
         "algorithm": str(pipeline_cfg.get("algorithm", "theta_beta_ratio")).strip() or "theta_beta_ratio",
         "info_path": str(pipeline_cfg.get("info_path", "")).strip(),
@@ -753,8 +664,6 @@ def build_adapter(args: Any) -> BaseAdapter:
         return MockAdapter()
     if args.input == "keyboard":
         return KeyboardAdapter()
-    if args.input == "tcp":
-        return TcpJsonAdapter(args.tcp_host, args.tcp_port)
     if args.input == "tcp_client":
         return TcpClientJsonAdapter(args.tcp_host, args.tcp_port)
     if args.input == "lsl":
@@ -788,11 +697,11 @@ def run_offline_file_pipeline(args: argparse.Namespace, pipeline_config: Dict[st
 def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
-    parser.add_argument("--input", choices=["mock", "tcp", "tcp_client", "lsl", "file"], default="mock")
+    parser.add_argument("--input", choices=["mock", "tcp_client", "lsl", "file"], default="mock")
     parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
 
-    parser.add_argument("--tcp-host", default="0.0.0.0", help="TCP server bind host")
-    parser.add_argument("--tcp-port", type=int, default=6001, help="TCP server bind port")
+    parser.add_argument("--tcp-host", default="0.0.0.0", help="TCP client connect host")
+    parser.add_argument("--tcp-port", type=int, default=6001, help="TCP client connect port")
 
     parser.add_argument("--lsl-stream-type", default="EEG", help="LSL stream type")
     parser.add_argument("--lsl-timeout", type=float, default=8.0, help="LSL discovery timeout")
