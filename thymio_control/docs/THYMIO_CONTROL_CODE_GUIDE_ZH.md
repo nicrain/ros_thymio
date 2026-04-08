@@ -171,7 +171,7 @@ Windows 设备 SDK
 
 ### 4.4 `scripts/eeg_control_node.py`（EEG 主控制节点）
 
-这个节点负责“从 adapter 拉数据 -> 算意图 -> 发控制”。
+这个节点负责"从 adapter 拉数据 -> 算意图 -> 发控制"。
 
 核心流程在 `_tick`：
 
@@ -179,29 +179,43 @@ Windows 设备 SDK
 2. 判断数据类型
 - 若含 `alpha/theta/beta`：走 band 特征链路
   - `enrich_features` -> `policy.compute_intents`
-- 若缺频段特征：回退到中性意图
+- 若缺频段特征：回退到中性意图（`speed_intent=0.5, steer_intent=0.5`）
 
-3. 特殊分支：movement 直接控制
-- 如果 frame 里有数值型 `movement`，会优先走 movement 模式直接下发 Twist。
-- 这是与意图模式并存的一条直控分支。
+3. **优先分支：feature 直接控制（`tcp_control_mode=feature`）**
+- 如果参数 `tcp_control_mode == "feature"` 且 frame 里有数值型 `feature`，走此分支。
+- 调用 `feature_to_twist(feature_value, ...)` 将标量 feature 映射为 Twist：
+  - `0.0 < feature < 0.5`：前进（`max_forward_speed`）
+  - `0.5 < feature < 1.0`：后退（`max_forward_speed * -0.75`）
+  - `feature == 1.0`：原地右转（`turn_angular_speed`）
+  - 其他值：停止
+- 发布后直接 return，不进入后续分支。
+- 这是 **默认生产模式**（`config/eeg_control_node.params.yaml` 中 `tcp_control_mode: feature`）。
 
-4. 正常意图映射
+4. 次优分支：movement 直接控制
+- 如果 frame 里有数值型 `movement`（且未走 feature 分支），走此分支：
+  - `0.0 < movement < 0.5`：前进（`max_forward_speed`）
+  - `0.5 < movement < 1.0`：后退（`reverse_speed`）
+  - `movement == 1.0`：原地右转（`turn_angular_speed`）
+  - 其他值：停止
+- 发布后直接 return。
+
+5. 正常意图映射（带频段特征时）
 - `_intents_to_twist` 按参数把 `speed_intent/steer_intent` 转换为线角速度。
 
-5. 发布与记录
+6. 发布与记录
 - 发布 `/cmd_vel`（或 remap 后 topic）
 - 发布分析 JSON 到 `analysis_topic`
 - 可选 CSV 记录
 
-6. 看门狗
-- 超时时如果上一帧是 movement 模式，会保持上次 movement 输出；
+7. 看门狗
+- 超时时如果上一帧是 `movement` 或 `feature` 模式，会保持上次 Twist 输出；
 - 否则按当前意图重发结果或停机。
 
 ### 4.5 `thymio_control/eeg_control_pipeline.py`（算法与输入适配）
 
-这个文件是可复用“算法层”，与 ROS 解耦。
+这个文件是可复用"算法层"，与 ROS 解耦。
 
-内容分 4 块：
+内容分 6 块：
 
 1. Adapter
 - `MockAdapter`
@@ -225,9 +239,20 @@ Windows 设备 SDK
   - 速度与 `theta_beta` 反向映射
   - 转向同样基于 `alpha_asym`
 
-4. 独立 CLI 主程序
+4. `feature_to_twist`（标量特征 → Twist）
+- 把单个 feature 值按离散阈值映射为 Twist，与 movement 模式约定一致。
+- 由 EEG 节点在 `tcp_control_mode=feature` 时调用，也供离线管线使用。
+
+5. 离线文件管线（`OfflineFilePipeline`）
+- 依赖 `EnobioFileReader` 读取 `.info` / `.easy` 录制文件。
+- 通过 `PIPELINE_ALGORITHMS`（当前支持 `theta_beta_ratio`）计算逐帧 feature。
+- `iter_twists()` 迭代输出 Twist，供集成测试或离线回放使用。
+- CLI 以 `--input file` 或 `pipeline_config.source_type: file` 触发此路径。
+
+6. 独立 CLI 主程序
 - 可直接运行 pipeline 发 UDP（不依赖 ROS 节点）。
-- 支持 `--config`，并实现“命令行参数优先于 YAML”。
+- 支持 `--config`，并实现"命令行参数优先于 YAML"。
+- `--input` 支持 `mock`、`tcp_client`、`lsl`、`file`（离线模式）。
 
 ---
 
@@ -252,6 +277,11 @@ EEG 节点参数。
 - `input: tcp_client`
 - `tcp_host: 172.27.96.1`
 - `tcp_port: 1234`
+- `tcp_control_mode: feature`（默认；可选 `movement`）
+
+`tcp_control_mode` 决定 EEG 节点如何处理 TCP 数据包中的控制字段：
+- `feature`：读取 `feature` 字段，用 `feature_to_twist` 直接映射为 Twist（默认生产模式）。
+- `movement`：读取 `movement` 字段，按离散区间映射为前进/后退/转向。
 
 如果你在本机调试，可先改成：
 - `input: mock`
@@ -362,6 +392,7 @@ ros2 topic echo /cmd_vel --once
 2. 以为桥接坏了，实际是端口不一致（launch 参数与 YAML 不一致）。
 3. 以为算法不对，实际是仍在用 `mock` 输入。
 4. 看到 `thymio_ros.py` 还在就继续用它。这个文件现在是 deprecated 兼容壳，不是主入口。
+5. 以为 EEG 节点走的是 band-features 意图模式，其实默认 `tcp_control_mode: feature`，优先走 `feature_to_twist` 直控，只有当 `feature` 字段不存在时才会回退到 movement / 意图链路。
 
 ---
 
