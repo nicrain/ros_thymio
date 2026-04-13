@@ -130,6 +130,20 @@ source install/setup.bash
 | ROS2 总编排 launch | `thymio_control/launch/experiment_core.launch.py` | `thymio_control/config/eeg_control_node.params.yaml` + `thymio_control/config/launch_args.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge` |
 | 统一 EEG pipeline CLI | `python3 -m thymio_control.eeg_control_pipeline` | `thymio_control/config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm`、`info_path`、`easy_path` |
 
+配置优先级（从高到低）：
+
+1. `ros2 launch ... key:=value` 的启动参数
+2. `thymio_control/config/eeg_control_node.params.yaml` 等参数文件
+3. Web GUI 后端配置（`/api/config`）
+
+Web GUI 当前已支持把配置变更持久化写回：
+
+- `thymio_control/config/launch_args.yaml`
+- `thymio_control/config/eeg_control_node.params.yaml`
+- `thymio_control/config/experiment_config.yaml`
+
+注意：Web 启动命令不会再拼接 `tcp_host/tcp_port` 作为 launch CLI 参数；该类参数应通过 `eeg_control_node.params.yaml` 管理。
+
 ```bash
 ros2 launch thymio_control eeg_thymio.launch.py use_sim:=true use_gui:=true
 ```
@@ -264,6 +278,7 @@ python3 -m thymio_control.eeg_control_pipeline \
 
 - `src/ros-thymio/`：Thymio 相关 ROS/ROS2 包（驱动、消息、描述等）
 - `src/ros-aseba/`：Aseba/Thymio 桥接相关包
+- `docs/archived/old_test_scripts/`：历史实验脚本归档（已弃用，不参与当前主流程）
 - `build/`、`install/`、`log/`：`colcon build` 生成目录
 
 ## 备注

@@ -13,7 +13,6 @@ def _bool_str(v: bool) -> str:
 
 def _build_launch_command(cfg: AppConfig) -> str:
     launch = cfg.launch
-    eeg = cfg.eeg
     parts = [
         "ros2 launch thymio_control experiment_core.launch.py",
         f"use_sim:={_bool_str(launch.use_sim)}",
@@ -23,8 +22,6 @@ def _build_launch_command(cfg: AppConfig) -> str:
         f"use_teleop:={_bool_str(launch.use_teleop)}",
         f"use_tobii_bridge:={_bool_str(launch.use_tobii_bridge)}",
         f"use_enobio_bridge:={_bool_str(launch.use_enobio_bridge)}",
-        f"tcp_host:={eeg.tcp_host}",
-        f"tcp_port:={eeg.tcp_port}",
     ]
     return " ".join(parts)
 

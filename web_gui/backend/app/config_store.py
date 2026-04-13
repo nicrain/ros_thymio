@@ -68,6 +68,69 @@ def _load_defaults() -> AppConfig:
     return cfg
 
 
+def _persist_config(cfg: AppConfig) -> None:
+    launch_payload = {
+        "use_sim": bool(cfg.launch.use_sim),
+        "use_gui": bool(cfg.launch.use_gui),
+        "run_eeg": bool(cfg.launch.run_eeg),
+        "run_gaze": bool(cfg.launch.run_gaze),
+        "use_teleop": bool(cfg.launch.use_teleop),
+        "use_tobii_bridge": bool(cfg.launch.use_tobii_bridge),
+        "use_enobio_bridge": bool(cfg.launch.use_enobio_bridge),
+        "tobii_udp_port": 5005,
+        "enobio_udp_port": 5006,
+        "eeg_config_file": "eeg_control_node.params.yaml",
+        "gaze_config_file": "gaze_control_node.params.yaml",
+    }
+    if _LAUNCH_YAML.exists():
+        launch_payload = _deep_merge(_safe_load(_LAUNCH_YAML), launch_payload)
+
+    eeg_payload = _safe_load(_EEG_YAML)
+    ros_params = dict(eeg_payload.get("/**", {}).get("ros__parameters", {}))
+    ros_params.update(
+        {
+            "input": str(cfg.eeg.input),
+            "policy": str(cfg.eeg.policy),
+            "tcp_control_mode": str(cfg.eeg.tcp_control_mode),
+            "tcp_host": str(cfg.eeg.tcp_host),
+            "tcp_port": int(cfg.eeg.tcp_port),
+            "lsl_stream_type": str(cfg.eeg.lsl_stream_type),
+            "lsl_timeout": float(cfg.eeg.lsl_timeout),
+            "lsl_channel_map": str(cfg.eeg.lsl_channel_map),
+            "max_forward_speed": float(cfg.motion.max_forward_speed),
+            "reverse_speed": float(cfg.motion.reverse_speed),
+            "turn_forward_speed": float(cfg.motion.turn_forward_speed),
+            "turn_angular_speed": float(cfg.motion.turn_angular_speed),
+            "reverse_threshold": float(cfg.motion.reverse_threshold),
+            "steer_deadzone": float(cfg.motion.steer_deadzone),
+            "line_mode": str(cfg.motion.line_mode),
+        }
+    )
+    eeg_payload["/**"] = _deep_merge(eeg_payload.get("/**", {}), {"ros__parameters": ros_params})
+
+    pipeline_payload = _safe_load(_PIPELINE_YAML)
+    pipeline_root = dict(pipeline_payload.get("pipeline_config", {}))
+    pipeline_root.update(
+        {
+            "source_type": str(cfg.pipeline.source_type),
+            "selected_channels": list(cfg.pipeline.selected_channels),
+            "algorithm": str(cfg.pipeline.algorithm),
+        }
+    )
+    pipeline_payload["pipeline_config"] = pipeline_root
+
+    _LAUNCH_YAML.parent.mkdir(parents=True, exist_ok=True)
+    _EEG_YAML.parent.mkdir(parents=True, exist_ok=True)
+    _PIPELINE_YAML.parent.mkdir(parents=True, exist_ok=True)
+
+    with _LAUNCH_YAML.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(launch_payload, f, sort_keys=False, allow_unicode=False)
+    with _EEG_YAML.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(eeg_payload, f, sort_keys=False, allow_unicode=False)
+    with _PIPELINE_YAML.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(pipeline_payload, f, sort_keys=False, allow_unicode=False)
+
+
 def init_store() -> None:
     global _current
     with _lock:
@@ -113,5 +176,6 @@ def patch_config(patch: dict[str, Any]) -> ConfigEnvelope:
     with _lock:
         merged = _deep_merge(_current.model_dump(), patch)
         _current = AppConfig.model_validate(merged)
+        _persist_config(_current)
         snap = _current
     return _build_envelope(snap)
