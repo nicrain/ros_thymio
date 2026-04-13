@@ -10,6 +10,7 @@
   --f-overlay: hsla(0, 0%, 7%, 0.8);
   --ok: #03904a;
   --warn: #f13a2c;
+  --accent: #ffd166;
 }
 
 * {
@@ -32,6 +33,7 @@ body {
   gap: 14px;
 }
 
+/* ── Hero ─────────────────────────────────────────────── */
 .hero {
   display: flex;
   justify-content: space-between;
@@ -71,25 +73,41 @@ h1 {
   background: #111;
 }
 
-.status-grid,
-.controls-grid,
+/* ── Layout helpers ───────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.two-col-1 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 12px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .charts-grid {
   display: grid;
   gap: 12px;
 }
 
-.status-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+/* ── Section labels ───────────────────────────────────── */
+.section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--f-mid-gray);
+  text-transform: uppercase;
+  margin: 0 0 10px 2px;
 }
 
-.controls-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.charts-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
+/* ── Cards ────────────────────────────────────────────── */
 .panel,
 .status-card {
   border: 1px solid #3a3a3a;
@@ -126,7 +144,7 @@ h1 {
 }
 
 .panel {
-  padding: 14px;
+  padding: 16px;
 }
 
 .panel h2 {
@@ -134,40 +152,268 @@ h1 {
   font-size: 18px;
 }
 
-.panel h3 {
-  margin: 16px 0 10px;
+/* ── Mode cards (radio) ───────────────────────────────── */
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mode-card {
+  border: 2px solid #3a3a3a;
+  border-radius: 4px;
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+}
+
+.mode-card:hover {
+  border-color: #666;
+  background: #141414;
+}
+
+.mode-card.selected {
+  border-color: var(--f-red);
+  background: #1c0e0e;
+}
+
+.mode-card.disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.mode-card input[type='radio'] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mode-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.mode-card-desc {
+  font-size: 12px;
+  color: var(--f-mid-gray);
+  line-height: 1.4;
+}
+
+/* ── EEG sub-panel ─────────────────────────────────────── */
+.eeg-sub {
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  padding: 14px;
+  margin-top: 10px;
+  background: #0c0c0c;
+  animation: slideDown 0.18s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.eeg-sub h3 {
+  margin: 0 0 10px;
   font-size: 14px;
   color: var(--f-light-gray);
   letter-spacing: 0.04em;
 }
 
-.toggle-row,
-.input-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.input-row input {
-  width: min(180px, 46vw);
-}
-
-input {
-  border: 1px solid #666;
-  border-radius: 2px;
-  padding: 6px 8px;
-  background: #090909;
-  color: var(--f-white);
+.sub-label {
   font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--f-mid-gray);
+  text-transform: uppercase;
+  margin: 12px 0 8px;
+  display: block;
 }
 
-input[type='checkbox'] {
+/* ── Sub radio rows ───────────────────────────────────── */
+.sub-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sub-radio {
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.sub-radio:hover {
+  border-color: #777;
+  background: #181818;
+}
+
+.sub-radio.selected {
+  border-color: var(--accent);
+  background: #1e1a0e;
+  color: var(--accent);
+}
+
+.sub-radio input[type='radio'] {
+  display: none;
+}
+
+/* ── File path input ──────────────────────────────────── */
+.file-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.file-row label {
+  font-size: 13px;
+  color: var(--f-light-gray);
+  white-space: nowrap;
+}
+
+.file-row input {
+  width: 100%;
+}
+
+/* ── Output section ───────────────────────────────────── */
+.output-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.output-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.output-radio {
+  flex: 1;
+  min-width: 110px;
+  border: 2px solid #3a3a3a;
+  border-radius: 4px;
+  padding: 12px 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.output-radio:hover {
+  border-color: #666;
+  background: #141414;
+}
+
+.output-radio.selected {
+  border-color: var(--f-red);
+  background: #1c0e0e;
+}
+
+.output-radio input[type='radio'] {
+  display: none;
+}
+
+.output-radio-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.output-radio-desc {
+  font-size: 12px;
+  color: var(--f-mid-gray);
+}
+
+/* ── Waveform toggle ──────────────────────────────────── */
+.waveform-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+
+.waveform-toggle.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.waveform-toggle input[type='checkbox'] {
   width: 18px;
   height: 18px;
+  cursor: inherit;
 }
 
+.waveform-toggle span {
+  font-size: 14px;
+}
+
+.waveform-toggle small {
+  color: var(--f-mid-gray);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* ── Status cards ─────────────────────────────────────── */
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.ok    { background: var(--ok); }
+.status-dot.warn  { background: var(--warn); }
+.status-dot.off   { background: #444; }
+
+.status-item-label {
+  font-size: 13px;
+  color: var(--f-light-gray);
+  flex: 1;
+}
+
+.status-item-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--f-mid-gray);
+}
+
+/* ── Charts ───────────────────────────────────────────── */
+.chart-panel {
+  overflow: hidden;
+}
+
+.charts-section {
+  transition: opacity 0.25s;
+}
+
+.charts-section.dimmed {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* ── Buttons ──────────────────────────────────────────── */
 .btn-row {
   display: flex;
   gap: 8px;
@@ -178,7 +424,7 @@ input[type='checkbox'] {
 button {
   border: 0;
   border-radius: 2px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
   cursor: pointer;
@@ -196,10 +442,11 @@ button.ghost {
   border: 1px solid var(--f-white);
 }
 
-.chart-panel {
-  overflow: hidden;
+button.ghost:hover {
+  background: rgba(255,255,255,0.08);
 }
 
+/* ── Footer log ────────────────────────────────────────── */
 .footer-log {
   border: 1px solid #3a3a3a;
   border-radius: 2px;
@@ -209,6 +456,7 @@ button.ghost {
   background: #0b0b0b;
 }
 
+/* ── Loading ───────────────────────────────────────────── */
 .loading {
   min-height: 100vh;
   display: grid;
@@ -216,17 +464,41 @@ button.ghost {
   font-family: 'IBM Plex Mono', monospace;
 }
 
+/* ── Misc ──────────────────────────────────────────────── */
+input {
+  border: 1px solid #666;
+  border-radius: 2px;
+  padding: 6px 8px;
+  background: #090909;
+  color: var(--f-white);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--f-red);
+}
+
+/* ── Responsive ───────────────────────────────────────── */
 @media (max-width: 1080px) {
-  .status-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .status-grid,
+  .two-col,
+  .two-col-1 {
+    grid-template-columns: 1fr;
   }
 
-  .controls-grid,
-  .charts-grid {
-    grid-template-columns: 1fr;
+  .mode-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 580px) {
+  .mode-cards {
+    grid-template-columns: 1fr;
   }
 }
