@@ -1,186 +1,238 @@
+/* ─────────────────────────────────────────────────────────
+   Ferrari-inspired Design System
+   Thymio Web GUI
+   ───────────────────────────────────────────────────────── */
+
+/* Fonts: Space Grotesk ≈ FerrariSans, IBM Plex Mono ≈ Body-Font */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* ── CSS Variables ────────────────────────────────────── */
 :root {
-  --f-red: #da291c;
-  --f-red-dark: #b01e0a;
-  --f-black: #000000;
-  --f-near-black: #181818;
-  --f-dark-surface: #303030;
-  --f-mid-gray: #8f8f8f;
-  --f-light-gray: #d2d2d2;
-  --f-white: #ffffff;
-  --f-overlay: hsla(0, 0%, 7%, 0.8);
-  --ok: #03904a;
-  --warn: #f13a2c;
-  --accent: #ffd166;
+  /* Primary */
+  --f-red:           #DA291C;
+  --f-red-dark:       #B01E0A;
+  --f-white:          #FFFFFF;
+
+  /* Surface */
+  --f-black:          #000000;
+  --f-dark-surface:   #303030;
+  --f-light-gray:     #D2D2D2;
+
+  /* Neutrals */
+  --f-near-black:     #181818;
+  --f-dark-gray:      #666666;
+  --f-mid-gray:       #8F8F8F;
+  --f-silver:         #969696;
+  --f-border:         #CCCCCC;
+
+  /* Accents */
+  --f-racing-yellow:  #FFF200;
+  --f-modena-yellow:  #F6E500;
+
+  /* Semantic */
+  --f-ok:             #03904A;
+  --f-warn:           #F13A2C;
+  --f-info:           #4C98B9;
+  --f-link-hover:     #3860BE;
+
+  /* Overlay */
+  --f-overlay:        hsla(0, 0%, 7%, 0.8);
+
+  /* Spacing base: 8px */
+  --sp1:  1px;
+  --sp2:  2px;
+  --sp4:  4px;
+  --sp6:  6px;
+  --sp8:  8px;
+  --sp10: 10px;
+  --sp12: 12px;
+  --sp16: 16px;
+  --sp20: 20px;
+  --sp24: 24px;
+  --sp32: 32px;
+  --sp40: 40px;
+  --sp48: 48px;
+  --sp64: 64px;
+
+  /* Typography */
+  --font-display:  'Space Grotesk', Arial, Helvetica, sans-serif;
+  --font-mono:     'IBM Plex Mono', 'Courier New', monospace;
+
+  /* Border-radius: razor 2px */
+  --radius-sm:  1px;
+  --radius:     2px;
+  --radius-md:  4px;
+  --radius-lg:  8px;
 }
 
-* {
+/* ── Reset ──────────────────────────────────────────────── */
+*, *::before, *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-display);
   color: var(--f-white);
-  background:
-    linear-gradient(180deg, var(--f-black) 0%, #0c0c0c 42%, var(--f-black) 100%);
+  background: var(--f-black);
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ── Page container ─────────────────────────────────────── */
 .page {
-  width: min(1320px, 94vw);
-  margin: 18px auto 26px;
-  display: grid;
-  gap: 14px;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
 }
 
-/* ── Hero ─────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   SECTION 1 — Hero (Absolute Black, cinematic void)
+   ───────────────────────────────────────────────────────── */
 .hero {
+  position: relative;
+  background: var(--f-black);
+  padding: var(--sp64) var(--sp32) var(--sp48);
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 20px;
-  border: 1px solid #222;
-  border-radius: 2px;
-  background: var(--f-overlay);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
 }
 
-.kicker {
-  margin: 0;
-  font-family: 'IBM Plex Mono', monospace;
-  letter-spacing: 0.16em;
-  color: var(--f-mid-gray);
-  font-size: 12px;
+/* Prancing Horse emblem placeholder — red silhouette on void */
+.hero-emblem {
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--sp32);
+  opacity: 0.92;
+  /* Simple geometric horse icon using CSS shapes */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-h1 {
-  margin: 6px 0;
-  font-size: clamp(28px, 4vw, 42px);
-  line-height: 1.1;
+.hero-emblem svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--f-red);
 }
 
-.subtitle {
-  margin: 0;
-  color: var(--f-light-gray);
-  max-width: 760px;
-}
-
-.badge {
-  border: 1px solid #444;
-  padding: 8px 12px;
-  border-radius: 2px;
-  font-family: 'IBM Plex Mono', monospace;
-  background: #111;
-}
-
-/* ── Layout helpers ───────────────────────────────────── */
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.two-col-1 {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 12px;
-}
-
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.charts-grid {
-  display: grid;
-  gap: 12px;
-}
-
-/* ── Section labels ───────────────────────────────────── */
-.section-label {
-  font-family: 'IBM Plex Mono', monospace;
+.hero-eyebrow {
+  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.14em;
-  color: var(--f-mid-gray);
+  font-weight: 500;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  margin: 0 0 10px 2px;
+  color: var(--f-silver);
+  margin-bottom: var(--sp12);
 }
 
-/* ── Cards ────────────────────────────────────────────── */
-.panel,
-.status-card {
-  border: 1px solid #3a3a3a;
-  border-radius: 2px;
-  background: #0f0f0f;
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  color: var(--f-white);
+  line-height: 1.1;
+  margin-bottom: var(--sp16);
 }
 
-.status-card {
-  padding: 14px;
-}
-
-.status-card h3 {
-  margin: 0;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  color: var(--f-light-gray);
-}
-
-.status-card p {
-  margin: 10px 0 6px;
-  font-size: 20px;
-}
-
-.status-card small {
+.hero-subtitle {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 400;
   color: var(--f-mid-gray);
+  max-width: 560px;
+  line-height: 1.6;
 }
 
-.status-card.ok {
-  box-shadow: inset 0 0 0 1px rgba(3, 144, 74, 0.65);
+.hero-divider {
+  width: 40px;
+  height: var(--sp2);
+  background: var(--f-red);
+  margin: var(--sp24) auto 0;
+  border: none;
 }
 
-.status-card.warn {
-  box-shadow: inset 0 0 0 1px rgba(241, 58, 44, 0.65);
+/* ─────────────────────────────────────────────────────────
+   SECTION 2 — Dark Surface (controls)
+   ───────────────────────────────────────────────────────── */
+.section-dark {
+  background: var(--f-black);
+  border-top: 1px solid #1a1a1a;
+  border-bottom: 1px solid #1a1a1a;
+  padding: var(--sp40) var(--sp32);
 }
 
-.panel {
-  padding: 16px;
+.section-dark .section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--f-silver);
+  margin-bottom: var(--sp20);
+  display: block;
 }
 
-.panel h2 {
-  margin: 0 0 12px;
+.section-dark .section-heading {
+  font-family: var(--font-display);
   font-size: 18px;
+  font-weight: 700;
+  color: var(--f-white);
+  margin-bottom: var(--sp24);
+  letter-spacing: 0;
 }
 
-/* ── Mode cards (radio) ───────────────────────────────── */
+.controls-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--sp40);
+  align-items: start;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Mode Cards (radio, 4-across)
+   ───────────────────────────────────────────────────────── */
 .mode-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp8);
 }
 
 .mode-card {
-  border: 2px solid #3a3a3a;
-  border-radius: 4px;
-  padding: 14px 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
   position: relative;
+  border: var(--sp2) solid #2a2a2a;
+  border-radius: var(--radius);
+  padding: var(--sp20) var(--sp16);
+  cursor: pointer;
+  background: #0c0c0c;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  text-align: center;
 }
 
 .mode-card:hover {
-  border-color: #666;
-  background: #141414;
+  border-color: #555;
+  background: #111;
 }
 
 .mode-card.selected {
   border-color: var(--f-red);
-  background: #1c0e0e;
+  background: #1a0c0c;
 }
 
-.mode-card.disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
+/* Ferrari Red indicator — top border only when selected */
+.mode-card.selected::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--f-red);
+  border-radius: var(--radius);
 }
 
 .mode-card input[type='radio'] {
@@ -190,315 +242,497 @@ h1 {
   height: 0;
 }
 
-.mode-card-title {
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.mode-card-desc {
-  font-size: 12px;
-  color: var(--f-mid-gray);
-  line-height: 1.4;
-}
-
-/* ── EEG sub-panel ─────────────────────────────────────── */
-.eeg-sub {
-  border: 1px solid #2a2a2a;
-  border-radius: 3px;
-  padding: 14px;
-  margin-top: 10px;
-  background: #0c0c0c;
-  animation: slideDown 0.18s ease-out;
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.eeg-sub h3 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  color: var(--f-light-gray);
-  letter-spacing: 0.04em;
-}
-
-.sub-label {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: var(--f-mid-gray);
-  text-transform: uppercase;
-  margin: 12px 0 8px;
+.mode-card-icon {
+  font-size: 24px;
+  margin-bottom: var(--sp8);
   display: block;
 }
 
-/* ── Sub radio rows ───────────────────────────────────── */
+.mode-card-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--f-white);
+  display: block;
+  margin-bottom: var(--sp4);
+}
+
+.mode-card-desc {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--f-silver);
+  letter-spacing: 0.3px;
+  display: block;
+  line-height: 1.4;
+}
+
+/* ─────────────────────────────────────────────────────────
+   EEG Sub-panel (white surface, editorial panel)
+   ───────────────────────────────────────────────────────── */
+.eeg-sub-panel {
+  background: var(--f-white);
+  border-radius: var(--radius);
+  padding: var(--sp24);
+  margin-top: var(--sp16);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.eeg-sub-panel h3 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--f-near-black);
+  letter-spacing: 0.5px;
+  margin-bottom: var(--sp16);
+}
+
+.eeg-sub-panel .sub-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--f-silver);
+  display: block;
+  margin: var(--sp16) 0 var(--sp8);
+}
+
+.eeg-sub-panel .sub-label:first-child {
+  margin-top: 0;
+}
+
+/* Sub-radio pills (white card style) */
 .sub-radios {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp6);
 }
 
 .sub-radio {
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 7px 12px;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  padding: var(--sp8) var(--sp14);
   cursor: pointer;
+  font-family: var(--font-display);
   font-size: 13px;
-  transition: border-color 0.15s, background 0.15s;
+  font-weight: 500;
+  color: var(--f-dark-gray);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   user-select: none;
 }
 
 .sub-radio:hover {
-  border-color: #777;
-  background: #181818;
+  border-color: #999;
+  color: var(--f-near-black);
 }
 
 .sub-radio.selected {
-  border-color: var(--accent);
-  background: #1e1a0e;
-  color: var(--accent);
+  background: var(--f-near-black);
+  border-color: var(--f-near-black);
+  color: var(--f-white);
 }
 
 .sub-radio input[type='radio'] {
   display: none;
 }
 
-/* ── File path input ──────────────────────────────────── */
+/* File path row */
 .file-row {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
+  grid-template-columns: 80px 1fr;
+  gap: var(--sp8);
   align-items: center;
-  margin-top: 10px;
+  margin-top: var(--sp12);
 }
 
 .file-row label {
-  font-size: 13px;
-  color: var(--f-light-gray);
-  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--f-dark-gray);
+  letter-spacing: 0.5px;
 }
 
 .file-row input {
   width: 100%;
+  border: 1px solid #ccc;
+  border-radius: var(--radius);
+  padding: var(--sp8) var(--sp10);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--f-near-black);
+  background: #fafafa;
 }
 
-/* ── Output section ───────────────────────────────────── */
+.file-row input:focus {
+  outline: none;
+  border-color: var(--f-red);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Output Section
+   ───────────────────────────────────────────────────────── */
 .output-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp16);
 }
 
-.output-group {
+.output-radios {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: var(--sp8);
 }
 
 .output-radio {
   flex: 1;
-  min-width: 110px;
-  border: 2px solid #3a3a3a;
-  border-radius: 4px;
-  padding: 12px 10px;
+  border: var(--sp2) solid #2a2a2a;
+  border-radius: var(--radius);
+  padding: var(--sp16) var(--sp12);
   cursor: pointer;
   text-align: center;
+  background: #0c0c0c;
   transition: border-color 0.15s, background 0.15s;
+  position: relative;
 }
 
 .output-radio:hover {
-  border-color: #666;
-  background: #141414;
+  border-color: #555;
+  background: #111;
 }
 
 .output-radio.selected {
   border-color: var(--f-red);
-  background: #1c0e0e;
+  background: #1a0c0c;
+}
+
+.output-radio.selected::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--f-red);
+  border-radius: var(--radius);
 }
 
 .output-radio input[type='radio'] {
-  display: none;
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
 .output-radio-title {
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-size: 13px;
   font-weight: 700;
-  margin-bottom: 4px;
+  color: var(--f-white);
+  display: block;
+  margin-bottom: var(--sp2);
 }
 
 .output-radio-desc {
-  font-size: 12px;
-  color: var(--f-mid-gray);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--f-silver);
+  letter-spacing: 0.3px;
+  display: block;
 }
 
-/* ── Waveform toggle ──────────────────────────────────── */
+/* Waveform toggle (checkbox) */
 .waveform-toggle {
   display: flex;
   align-items: center;
-  gap: 10px;
-  border: 1px solid #333;
-  border-radius: 3px;
-  padding: 10px 14px;
+  gap: var(--sp10);
+  border: var(--sp2) solid #2a2a2a;
+  border-radius: var(--radius);
+  padding: var(--sp12) var(--sp16);
   cursor: pointer;
   user-select: none;
-  transition: opacity 0.15s;
+  background: #0c0c0c;
+  transition: opacity 0.2s, border-color 0.15s;
 }
 
 .waveform-toggle.disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
 .waveform-toggle input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   cursor: inherit;
+  accent-color: var(--f-red);
 }
 
-.waveform-toggle span {
-  font-size: 14px;
+.waveform-toggle-text {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--f-white);
+  flex: 1;
 }
 
-.waveform-toggle small {
-  color: var(--f-mid-gray);
-  font-size: 12px;
-  margin-left: auto;
+.waveform-toggle-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--f-silver);
+  letter-spacing: 0.3px;
 }
 
-/* ── Status cards ─────────────────────────────────────── */
-.status-item {
+/* ─────────────────────────────────────────────────────────
+   Status strip
+   ───────────────────────────────────────────────────────── */
+.status-strip {
+  margin-top: var(--sp24);
+  border-top: 1px solid #1a1a1a;
+  padding-top: var(--sp20);
+}
+
+.status-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  gap: var(--sp10);
+  margin-bottom: var(--sp10);
+}
+
+.status-row:last-child {
+  margin-bottom: 0;
 }
 
 .status-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.status-dot.ok    { background: var(--ok); }
-.status-dot.warn  { background: var(--warn); }
-.status-dot.off   { background: #444; }
+.status-dot.ok   { background: var(--f-ok); }
+.status-dot.warn { background: var(--f-warn); }
+.status-dot.off  { background: #3a3a3a; }
 
-.status-item-label {
-  font-size: 13px;
-  color: var(--f-light-gray);
+.status-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--f-silver);
+  letter-spacing: 0.5px;
   flex: 1;
 }
 
-.status-item-value {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
+.status-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--f-mid-gray);
 }
 
-/* ── Charts ───────────────────────────────────────────── */
-.chart-panel {
-  overflow: hidden;
-}
-
-.charts-section {
-  transition: opacity 0.25s;
-}
-
-.charts-section.dimmed {
-  opacity: 0.2;
-  pointer-events: none;
-}
-
-/* ── Buttons ──────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   Buttons
+   ───────────────────────────────────────────────────────── */
 .btn-row {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  gap: var(--sp8);
+  margin-top: var(--sp24);
   flex-wrap: wrap;
 }
 
-button {
-  border: 0;
-  border-radius: 2px;
-  padding: 8px 14px;
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 600;
+.btn {
+  border-radius: var(--radius);
+  padding: var(--sp12) var(--sp20);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
-  color: var(--f-white);
-  background: var(--f-red);
+  border: none;
+  transition: background 0.15s, opacity 0.15s;
+  letter-spacing: 0.5px;
 }
 
-button:hover {
+.btn-primary {
+  background: var(--f-white);
+  color: var(--f-black);
+  border: 1px solid var(--f-white);
+}
+
+.btn-primary:hover {
+  background: #e0e0e0;
+}
+
+.btn-cta {
+  background: var(--f-red);
+  color: var(--f-white);
+}
+
+.btn-cta:hover {
   background: var(--f-red-dark);
 }
 
-button.ghost {
+.btn-ghost {
   background: transparent;
   color: var(--f-white);
   border: 1px solid var(--f-white);
 }
 
-button.ghost:hover {
+.btn-ghost:hover {
   background: rgba(255,255,255,0.08);
+  border-color: #ccc;
 }
 
-/* ── Footer log ────────────────────────────────────────── */
+.btn:focus {
+  outline: 2px solid var(--f-red);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────
+   SECTION 3 — White editorial panel (waveforms)
+   This is the "white page" in the chiaroscuro rhythm
+   ───────────────────────────────────────────────────────── */
+.section-light {
+  background: var(--f-white);
+  padding: var(--sp40) var(--sp32);
+}
+
+.section-light .section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--f-silver);
+  margin-bottom: var(--sp20);
+  display: block;
+}
+
+.section-light .section-heading {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--f-near-black);
+  margin-bottom: var(--sp24);
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp16);
+  transition: opacity 0.25s ease;
+}
+
+.charts-grid.dimmed {
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.chart-card {
+  background: #f8f8f8;
+  border: 1px solid #e8e8e8;
+  border-radius: var(--radius);
+  padding: var(--sp16);
+}
+
+.chart-card h3 {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--f-dark-gray);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: var(--sp12);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Footer (Absolute Black)
+   ───────────────────────────────────────────────────────── */
+.footer {
+  background: var(--f-black);
+  border-top: 1px solid #1a1a1a;
+  padding: var(--sp20) var(--sp32);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .footer-log {
-  border: 1px solid #3a3a3a;
-  border-radius: 2px;
-  padding: 10px 12px;
-  font-family: 'IBM Plex Mono', monospace;
-  color: var(--f-light-gray);
-  background: #0b0b0b;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--f-silver);
+  letter-spacing: 0.3px;
 }
 
-/* ── Loading ───────────────────────────────────────────── */
+.footer-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--f-silver);
+  opacity: 0.5;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Loading
+   ───────────────────────────────────────────────────────── */
 .loading {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  font-family: 'IBM Plex Mono', monospace;
-}
-
-/* ── Misc ──────────────────────────────────────────────── */
-input {
-  border: 1px solid #666;
-  border-radius: 2px;
-  padding: 6px 8px;
-  background: #090909;
-  color: var(--f-white);
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
+  color: var(--f-silver);
+  letter-spacing: 1px;
 }
 
-input:focus {
-  outline: none;
-  border-color: var(--f-red);
-}
-
-/* ── Responsive ───────────────────────────────────────── */
-@media (max-width: 1080px) {
-  .status-grid,
-  .two-col,
-  .two-col-1 {
+/* ─────────────────────────────────────────────────────────
+   Responsive
+   ───────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .controls-grid {
     grid-template-columns: 1fr;
+    gap: var(--sp32);
   }
 
   .mode-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, 1fr);
   }
 
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
   .hero {
+    padding: var(--sp40) var(--sp20) var(--sp32);
+  }
+
+  .section-dark,
+  .section-light {
+    padding: var(--sp32) var(--sp20);
+  }
+
+  .mode-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .output-radios {
     flex-direction: column;
   }
-}
 
-@media (max-width: 580px) {
-  .mode-cards {
-    grid-template-columns: 1fr;
+  .btn-row {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .footer {
+    flex-direction: column;
+    gap: var(--sp8);
+    text-align: center;
   }
 }
