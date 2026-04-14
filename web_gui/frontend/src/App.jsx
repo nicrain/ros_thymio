@@ -50,7 +50,6 @@ function CameraPanel() {
   const camWsRef = useRef(null);
 
   useEffect(() => {
-    if (wsRef.current) wsRef.current.close();
     const wsUrl = (import.meta.env.VITE_API_BASE || '').replace(/^http/, 'ws') + '/ws/gazebo_frame';
     const ws = new WebSocket(wsUrl);
     camWsRef.current = ws;
@@ -476,7 +475,7 @@ export default function App() {
       </div>
 
       {/* ── SECTION 2b: Gazebo Camera Stream ─────────────── */}
-      <CameraPanel />
+      {outputMode === 'thymio_simu' && <CameraPanel />}
 
       {/* ── SECTION 3: Waveforms (White editorial panel) ─ */}
       <div className="section-light">
