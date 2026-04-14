@@ -104,7 +104,7 @@ async def ws_gazebo_frame(websocket: WebSocket) -> None:
                 await websocket.send(data)
     except websockets.exceptions.InvalidURI:
         await websocket.send_json({"error": "camera_bridge_unavailable"})
-    except (websockets.exceptions.ConnectionRefused, OSError):
+    except (websockets.exceptions.ConnectionRefusedError, OSError):
         await websocket.send_json({"error": "camera_bridge_offline"})
     except WebSocketDisconnect:
         return
