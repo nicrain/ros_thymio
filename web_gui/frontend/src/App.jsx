@@ -75,9 +75,9 @@ function CameraPanel() {
     <div className="camera-panel">
       <div className="camera-header">
         <span className="section-label">02b — Gazebo View</span>
-        <div className={`cam-status-dot ${camWsConnected ? 'ok' : 'warn'}`} />
+        <div className={`cam-status-dot ${camWsConnected && !camError ? 'ok' : 'warn'}`} />
         <span className="cam-status-text">
-          {camWsConnected ? 'live' : camError ? camError : 'connecting…'}
+          {camWsConnected ? (camError ? camError : 'live') : 'connecting…'}
         </span>
       </div>
       <div className="camera-frame-wrapper">
