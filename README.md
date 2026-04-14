@@ -283,6 +283,55 @@ python3 -m thymio_control.eeg_control_pipeline \
 - `docs/archived/old_test_scripts/`：历史实验脚本归档（已弃用，不参与当前主流程）
 - `build/`、`install/`、`log/`：`colcon build` 生成目录
 
+## Web GUI
+
+FastAPI 后端 + React 前端，提供实验可视化与配置界面。
+
+### 启动后端
+
+```bash
+cd ~/ros_thymio/web_gui/backend
+source ~/ros_thymio/.venv/bin/activate
+python -m app.main
+```
+
+后端运行在 `http://0.0.0.0:8010`。
+
+### 启动前端
+
+```bash
+cd ~/ros_thymio/web_gui/frontend
+npm run dev
+```
+
+前端运行在 `http://localhost:5173`。
+
+### Gazebo 摄像头无窗口模式
+
+启动 Gazebo 仿真（无窗口）：
+
+```bash
+ros2 launch thymio_control experiment_core.launch.py use_sim:=true use_gui:=false
+```
+
+确保摄像头 bridge 在跑：
+
+```bash
+ros2 run thymio_web_bridge gazebo_camera_bridge
+```
+
+完整数据链路：
+
+```
+Gazebo (headless)
+  → /camera/image_raw
+  → ros_gz_bridge → /image_topic
+  → gazebo_camera_bridge (cv_bridge → jpg)
+  → ws://127.0.0.1:8011/ws/gazebo_frame
+  → FastAPI /ws/gazebo_frame (代理)
+  → React CameraPanel
+```
+
 ## 备注
 
 - `test.urdf` 为由 `xacro` 生成的文件，不建议直接编辑
