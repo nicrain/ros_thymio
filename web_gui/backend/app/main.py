@@ -83,6 +83,33 @@ async def ws_stream(websocket: WebSocket) -> None:
         return
 
 
+# --------------------------------------------------------------------------- #
+# /ws/gazebo_frame — proxies frames from the Gazebo camera bridge node
+# (ros2 run thymio_web_bridge gazebo_camera_bridge → ws://127.0.0.1:8011)
+# Frontend connects here to avoid CORS and direct port exposure.
+# --------------------------------------------------------------------------- #
+CAMERA_BRIDGE_URL = os.getenv("CAMERA_BRIDGE_URL", "ws://127.0.0.1:8011/ws/gazebo_frame")
+
+
+@app.websocket("/ws/gazebo_frame")
+async def ws_gazebo_frame(websocket: WebSocket) -> None:
+    """Proxy WebSocket → upstream camera bridge. Falls back gracefully if bridge
+    is not running (e.g. Gazebo not started yet)."""
+    await websocket.accept()
+    try:
+        import websockets
+        async with websockets.connect(CAMERA_BRIDGE_URL, ping_interval=None) as upstream:
+            while True:
+                data = await upstream.recv()
+                await websocket.send(data)
+    except websockets.exceptions.InvalidURI:
+        await websocket.send_json({"error": "camera_bridge_unavailable"})
+    except (websockets.exceptions.ConnectionRefused, OSError):
+        await websocket.send_json({"error": "camera_bridge_offline"})
+    except WebSocketDisconnect:
+        return
+
+
 if __name__ == "__main__":
     import uvicorn
 

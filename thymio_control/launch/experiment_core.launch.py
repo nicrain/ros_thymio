@@ -42,6 +42,7 @@ def generate_launch_description():
     use_teleop = LaunchConfiguration("use_teleop")
     run_eeg = LaunchConfiguration("run_eeg")
     run_gaze = LaunchConfiguration("run_gaze")
+    run_rviz = LaunchConfiguration("run_rviz")
     eeg_config_file = LaunchConfiguration("eeg_config_file")
     gaze_config_file = LaunchConfiguration("gaze_config_file")
     use_tobii_bridge = LaunchConfiguration("use_tobii_bridge")
@@ -55,6 +56,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_teleop", default_value=_str(defaults.get("use_teleop", False))),
         DeclareLaunchArgument("run_eeg", default_value=_str(defaults.get("run_eeg", True))),
         DeclareLaunchArgument("run_gaze", default_value=_str(defaults.get("run_gaze", False))),
+        DeclareLaunchArgument("run_rviz", default_value=_str(defaults.get("run_rviz", False))),
         DeclareLaunchArgument("use_tobii_bridge", default_value=_str(defaults.get("use_tobii_bridge", False))),
         DeclareLaunchArgument("use_enobio_bridge", default_value=_str(defaults.get("use_enobio_bridge", False))),
         DeclareLaunchArgument("tobii_udp_port", default_value=str(defaults.get("tobii_udp_port", 5005))),
@@ -181,6 +183,7 @@ def generate_launch_description():
         arguments=["-d", os.path.join(get_package_share_directory("thymio_control"), "config", "default.rviz"), "--ros-args", "--log-level", "error"],
         parameters=[{"use_sim_time": True}],
         output="log",
+        condition=IfCondition(run_rviz),
     )
 
     return LaunchDescription(
@@ -189,7 +192,7 @@ def generate_launch_description():
             set_gz_resource_path,
             SetEnvironmentVariable("GZ_PARTITION", gz_partition),
             LogInfo(msg=["GZ_PARTITION=", gz_partition]),
-            LogInfo(msg=["Launch: sim=", use_sim, " eeg=", run_eeg, " gaze=", run_gaze, " teleop=", use_teleop]),
+            LogInfo(msg=["Launch: sim=", use_sim, " eeg=", run_eeg, " gaze=", run_gaze, " teleop=", use_teleop, " rviz=", run_rviz]),
             gz_sim_gui,
             gz_sim_headless,
             sim_model_publisher,

@@ -12,49 +12,14 @@ function pushPoint(arr, value) {
   return out;
 }
 
-/* ── Hero: Thymio emblem SVG ─────────────────────────────── */
+/* ── Hero: Thymio robot icon ─────────────────────────────── */
 function HeroEmblem() {
   return (
     <div className="hero-emblem">
-      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        {/* Stylized Thymio/horse silhouette */}
-        <ellipse cx="50" cy="82" rx="30" ry="6" opacity="0.2" />
-        <path d="
-          M50 18
-          C42 18 36 24 36 32
-          L36 38 C28 38 22 44 22 52
-          L22 68 C22 76 28 82 36 82
-          L64 82 C72 82 78 76 78 68
-          L78 52 C78 44 72 38 64 38
-          L64 32 C64 24 58 18 50 18 Z
-        " />
-        {/* Horse head silhouette */}
-        <path d="
-          M50 18
-          C54 10 62 8 68 12
-          L72 15
-          C74 16 74 19 72 20
-          L68 23
-          C64 26 58 26 54 24
-          L50 20
-          Z
-        " />
-        {/* Ear */}
-        <path d="M62 14 L65 8 L68 15 Z" />
-        {/* Eye */}
-        <circle cx="63" cy="18" r="2" fill="#1a0c0c" />
-        {/* Mane lines */}
-        <line x1="52" y1="12" x2="50" y2="22" stroke="currentColor" strokeWidth="2" />
-        <line x1="56" y1="10" x2="54" y2="20" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="60" y1="9"  x2="58" y2="19" stroke="currentColor" strokeWidth="1.5" />
-        {/* Legs */}
-        <rect x="30" y="78" width="8" height="14" rx="2" />
-        <rect x="44" y="78" width="8" height="14" rx="2" />
-        <rect x="56" y="78" width="8" height="14" rx="2" />
-        <rect x="68" y="78" width="8" height="14" rx="2" />
-        {/* Tail */}
-        <path d="M22 55 C14 50 10 58 14 65 C16 68 20 66 22 62" />
-      </svg>
+      <img
+        src="https://play-lh.googleusercontent.com/_S_Xg6eG0b3rFbtPrc9DVd2DbFbM71_1YO9HZQqxGnYyKy8SuPmtfE9m_ynqxj_WTIw=w600-h300-pc0xffffff-pd"
+        alt="Thymio"
+      />
     </div>
   );
 }
@@ -74,6 +39,57 @@ function ModeCard({ value, title, desc, icon, selected, onSelect }) {
       <span className="mode-card-title">{title}</span>
       <span className="mode-card-desc">{desc}</span>
     </label>
+  );
+}
+
+/* ── Camera Panel ──────────────────────────────────────── */
+function CameraPanel() {
+  const [frame, setFrame] = useState(null);
+  const [camWsConnected, setCamWsConnected] = useState(false);
+  const [camError, setCamError] = useState(null);
+  const camWsRef = useRef(null);
+
+  useEffect(() => {
+    if (wsRef.current) wsRef.current.close();
+    const wsUrl = (import.meta.env.VITE_API_BASE || '').replace(/^http/, 'ws') + '/ws/gazebo_frame';
+    const ws = new WebSocket(wsUrl);
+    camWsRef.current = ws;
+
+    ws.onopen  = () => { setCamWsConnected(true); setCamError(null); };
+    ws.onclose = () => { setCamWsConnected(false); };
+    ws.onerror = () => { setCamError('connection error'); };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.error) {
+        setCamError(data.error);
+        return;
+      }
+      if (data.image) {
+        setFrame(`data:image/jpeg;base64,${data.image}`);
+        setCamError(null);
+      }
+    };
+    return () => ws.close();
+  }, []);
+
+  return (
+    <div className="camera-panel">
+      <div className="camera-header">
+        <span className="section-label">02b — Gazebo View</span>
+        <div className={`cam-status-dot ${camWsConnected ? 'ok' : 'warn'}`} />
+        <span className="cam-status-text">
+          {camWsConnected ? 'live' : camError ? camError : 'connecting…'}
+        </span>
+      </div>
+      <div className="camera-frame-wrapper">
+        {frame
+          ? <img src={frame} alt="Gazebo overhead view" className="camera-frame" />
+          : <div className="camera-placeholder">
+              {camError ? `Camera: ${camError}` : 'Waiting for stream…'}
+            </div>
+        }
+      </div>
+    </div>
   );
 }
 
@@ -292,6 +308,18 @@ export default function App() {
       setFeedback('Config saved in backend memory.');
     } catch (err) {
       setFeedback(`Save failed: ${err.message}`);
+      throw err;
+    }
+  }
+
+  async function startSystem() {
+    try {
+      await saveConfig();
+      await runAction('/api/system/start', true);
+    } catch (err) {
+      if (!String(err?.message || err).includes('Save failed')) {
+        setFeedback(`Start failed: ${err.message}`);
+      }
     }
   }
 
@@ -312,16 +340,18 @@ export default function App() {
   return (
     <div className="page">
 
-      {/* ── SECTION 1: Hero (Absolute Black) ─────────── */}
-      <header className="hero">
-        <HeroEmblem />
-        <p className="hero-eyebrow">THYMIO CONTROL CONSOLE</p>
-        <h1 className="hero-title">EEG–Robot Interface</h1>
-        <p className="hero-subtitle">
-          Configure input source, output target, and monitor real-time EEG signals.
-          Designed for editorial precision.
-        </p>
-        <hr className="hero-divider" />
+      {/* ── TOP BAR ───────────────────────────────────── */}
+      <header className="topbar">
+        <div className="topbar-brand">
+          <HeroEmblem />
+          <span className="topbar-title">Thymio EEG Control</span>
+        </div>
+        <div className={`topbar-status ${wsConnected ? 'ok' : 'warn'}`}>
+          <span className="status-dot-wrapper">
+            <span className={`status-dot ${wsConnected ? 'ok' : 'warn'}`} />
+          </span>
+          <span className="topbar-status-text">WebSocket {wsConnected ? 'connected' : 'disconnected'}</span>
+        </div>
       </header>
 
       {/* ── SECTION 2: Controls (Dark surface) ────────── */}
@@ -358,7 +388,7 @@ export default function App() {
               />
               <ModeCard
                 value="teleop"
-                title="Teleop"
+                title="Keyboard"
                 desc="Keyboard / joystick"
                 icon="⊕"
                 selected={inputMode === 'teleop'}
@@ -378,8 +408,7 @@ export default function App() {
             )}
 
             <div className="btn-row">
-              <button className="btn btn-primary" onClick={saveConfig}>Save Config</button>
-              <button className="btn btn-cta"     onClick={() => runAction('/api/system/start', true)}>Start</button>
+              <button className="btn btn-cta"     onClick={startSystem}>Start</button>
               <button className="btn btn-ghost"   onClick={() => runAction('/api/system/stop',  true)}>Stop</button>
             </div>
           </div>
@@ -387,7 +416,6 @@ export default function App() {
           {/* RIGHT — Output Target */}
           <div>
             <span className="section-label">02 — Output Target</span>
-            <p className="section-heading">Robot Destination</p>
 
             <div className="output-radios">
               {[
@@ -446,6 +474,9 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* ── SECTION 2b: Gazebo Camera Stream ─────────────── */}
+      <CameraPanel />
 
       {/* ── SECTION 3: Waveforms (White editorial panel) ─ */}
       <div className="section-light">

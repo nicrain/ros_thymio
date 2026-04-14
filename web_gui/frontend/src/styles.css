@@ -88,72 +88,62 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────
-   SECTION 1 — Hero (Absolute Black, cinematic void)
+   TOP BAR — Compact sticky header
    ───────────────────────────────────────────────────────── */
-.hero {
-  position: relative;
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: var(--f-black);
-  padding: var(--sp64) var(--sp32) var(--sp48);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  overflow: hidden;
+  border-bottom: 1px solid #1a1a1a;
+  padding: var(--sp12) var(--sp32);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
-/* Prancing Horse emblem placeholder — red silhouette on void */
-.hero-emblem {
-  width: 72px;
-  height: 72px;
-  margin-bottom: var(--sp32);
-  opacity: 0.92;
-  /* Simple geometric horse icon using CSS shapes */
+.topbar-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--sp12);
 }
 
-.hero-emblem svg {
+.topbar-brand .hero-emblem {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 0;
+}
+
+.topbar-brand .hero-emblem img {
   width: 100%;
   height: 100%;
-  fill: var(--f-red);
+  object-fit: contain;
+  filter: sepia(1) saturate(10) hue-rotate(-10deg);
 }
 
-.hero-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--f-silver);
-  margin-bottom: var(--sp12);
-}
-
-.hero-title {
+.topbar-title {
   font-family: var(--font-display);
-  font-size: clamp(32px, 5vw, 56px);
-  font-weight: 500;
-  letter-spacing: -0.5px;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--f-white);
-  line-height: 1.1;
-  margin-bottom: var(--sp16);
+  letter-spacing: -0.2px;
 }
 
-.hero-subtitle {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--f-mid-gray);
-  max-width: 560px;
-  line-height: 1.6;
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp8);
 }
 
-.hero-divider {
-  width: 40px;
-  height: var(--sp2);
-  background: var(--f-red);
-  margin: var(--sp24) auto 0;
-  border: none;
+.status-dot-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-status-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--f-silver);
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -705,7 +695,7 @@ body {
 
 @media (max-width: 600px) {
   .hero {
-    padding: var(--sp40) var(--sp20) var(--sp32);
+    padding: var(--sp28) var(--sp20) var(--sp24);
   }
 
   .section-dark,
@@ -735,4 +725,61 @@ body {
     gap: var(--sp8);
     text-align: center;
   }
+}
+
+/* ── Camera Panel ──────────────────────────────────────── */
+.camera-panel {
+  background: var(--f-near-black);
+  padding: var(--sp20) var(--sp20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp12);
+}
+
+.camera-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp10);
+}
+
+.cam-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--f-warn);
+}
+.cam-status-dot.ok {
+  background: var(--f-ok);
+}
+
+.cam-status-text {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--f-mid-gray);
+}
+
+.camera-frame-wrapper {
+  width: 100%;
+  max-width: 640px;
+  border-radius: var(--sp8);
+  overflow: hidden;
+  background: #111;
+  border: 1px solid var(--f-dark-gray);
+}
+
+.camera-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.camera-placeholder {
+  width: 100%;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--f-dark-gray);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
 }

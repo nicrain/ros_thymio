@@ -59,5 +59,43 @@
       </camera>
     </gui>
 
+    <!-- ============================================================
+      Gazebo camera — overhead view for web UI streaming.
+      Published topic: /camera/image_raw
+      ROS2 bridge in gz_bridge.yaml → /image_topic
+      ============================================================ -->
+    <model name='overhead_camera'>
+      <static>true</static>
+      <pose>0.0 0.0 0.6 0 1.5708 0</pose>
+      <link name='camera_link'>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <mass>0.01</mass>
+        </inertial>
+        <sensor name='overhead_rgb_sensor' type='camera'>
+          <always_on>true</always_on>
+          <update_rate>10</update_rate>
+          <visualize>false</visualize>
+          <camera>
+            <horizontal_fov>1.2</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.02</near>
+              <far>5.0</far>
+            </clip>
+          </camera>
+          <plugin name='gz_sim_camera_ros_bridge'
+                   filename='gz-sim-camera-system'>
+            <ros_topic>/camera/image_raw</ros_topic>
+            <hz>10</hz>
+          </plugin>
+        </sensor>
+      </link>
+    </model>
+
   </world>
 </sdf>

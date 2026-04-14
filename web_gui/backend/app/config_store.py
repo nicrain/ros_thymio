@@ -36,6 +36,7 @@ def _load_defaults() -> AppConfig:
     cfg.launch.use_gui = bool(launch_cfg.get("use_gui", cfg.launch.use_gui))
     cfg.launch.run_eeg = bool(launch_cfg.get("run_eeg", cfg.launch.run_eeg))
     cfg.launch.run_gaze = bool(launch_cfg.get("run_gaze", cfg.launch.run_gaze))
+    cfg.launch.run_rviz = bool(launch_cfg.get("run_rviz", cfg.launch.run_rviz))
     cfg.launch.use_teleop = bool(launch_cfg.get("use_teleop", cfg.launch.use_teleop))
     cfg.launch.use_tobii_bridge = bool(launch_cfg.get("use_tobii_bridge", cfg.launch.use_tobii_bridge))
     cfg.launch.use_enobio_bridge = bool(launch_cfg.get("use_enobio_bridge", cfg.launch.use_enobio_bridge))
@@ -74,6 +75,7 @@ def _persist_config(cfg: AppConfig) -> None:
         "use_gui": bool(cfg.launch.use_gui),
         "run_eeg": bool(cfg.launch.run_eeg),
         "run_gaze": bool(cfg.launch.run_gaze),
+        "run_rviz": bool(cfg.launch.run_rviz),
         "use_teleop": bool(cfg.launch.use_teleop),
         "use_tobii_bridge": bool(cfg.launch.use_tobii_bridge),
         "use_enobio_bridge": bool(cfg.launch.use_enobio_bridge),

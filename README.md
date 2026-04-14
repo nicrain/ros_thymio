@@ -128,6 +128,8 @@ source install/setup.bash
 | --- | --- | --- | --- |
 | ROS2 EEG launch | `thymio_control/launch/eeg_thymio.launch.py` | `thymio_control/config/eeg_control_node.params.yaml` | `input`、`policy`、`tcp_control_mode`、`tcp_host`、`tcp_port`、`cmd_topic` |
 | ROS2 总编排 launch | `thymio_control/launch/experiment_core.launch.py` | `thymio_control/config/eeg_control_node.params.yaml` + `thymio_control/config/launch_args.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge` |
+
+说明：`experiment_core.launch.py` 里的 RViz 现在默认关闭，只有在需要调试 TF、模型或传感器可视化时才建议显式开启 `run_rviz:=true`。日常仿真更建议保留 Gazebo，避免同时打开两个窗口占用额外资源。
 | 统一 EEG pipeline CLI | `python3 -m thymio_control.eeg_control_pipeline` | `thymio_control/config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm`、`info_path`、`easy_path` |
 
 配置优先级（从高到低）：

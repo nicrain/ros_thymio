@@ -9,6 +9,10 @@ __pycache__/
 *$py.class
 .venv/
 
+# Frontend build artifacts
+web_gui/frontend/node_modules/
+web_gui/frontend/dist/
+
 # Editor temporary files
 *~
 *.swp
