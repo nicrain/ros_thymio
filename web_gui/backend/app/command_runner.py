@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import signal
 import subprocess
 from pathlib import Path
@@ -67,7 +68,7 @@ def _source_prefix() -> str:
     repo_setup = _repo_root() / "install" / "setup.bash"
     parts = ["source /opt/ros/kilted/setup.bash"]
     if repo_setup.exists():
-        parts.append(f"source '{str(repo_setup)}'")
+        parts.append(f"source {shlex.quote(str(repo_setup))}")
     return " && ".join(parts)
 
 
