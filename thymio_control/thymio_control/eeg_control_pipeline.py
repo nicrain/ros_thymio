@@ -406,7 +406,10 @@ class TcpFileAdapter(BaseAdapter):
             elif candidate_recode.exists():
                 path = candidate_recode
             else:
-                path = candidate_repo
+                raise FileNotFoundError(
+                    f"TCP replay file not found: '{self._file_path}' "
+                    f"(tried {candidate_repo} and {candidate_recode})"
+                )
 
         with open(path, "r", encoding="utf-8") as f:
             self._lines = f.readlines()
