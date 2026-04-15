@@ -9,6 +9,9 @@
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands" />
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster" />
     <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact" />
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
 
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
@@ -76,6 +79,7 @@
           <always_on>true</always_on>
           <update_rate>10</update_rate>
           <visualize>false</visualize>
+          <topic>/camera/image_raw</topic>
           <camera>
             <horizontal_fov>1.2</horizontal_fov>
             <image>
@@ -88,11 +92,6 @@
               <far>5.0</far>
             </clip>
           </camera>
-          <plugin name='gz_sim_camera_ros_bridge'
-                   filename='gz-sim-camera-system'>
-            <ros_topic>/camera/image_raw</ros_topic>
-            <hz>10</hz>
-          </plugin>
         </sensor>
       </link>
     </model>

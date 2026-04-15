@@ -10,7 +10,7 @@ setup(
         ('share/thymio_web_bridge', ['package.xml']),
         ('share/thymio_web_bridge/launch', ['launch/camera_bridge.launch.py']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'websockets'],
     zip_safe=True,
     maintainer='robot',
     maintainer_email='robot@example.com',

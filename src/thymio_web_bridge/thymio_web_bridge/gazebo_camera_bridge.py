@@ -53,7 +53,7 @@ class GazeboCameraBridge(Node):
             bridge = cv_bridge.CvBridge()
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             import cv2
-            _, jpg_bytes = cv2.imencode('.jpg', cv_img, [cv2.IMJPEG_QUALITY, 70])
+            _, jpg_bytes = cv2.imencode('.jpg', cv_img, [cv2.IMWRITE_JPEG_QUALITY, 70])
             jpg_bytes = jpg_bytes.tobytes()
             if _frame_queue.full():
                 try:
@@ -73,7 +73,8 @@ async def ws_server(host: str = '127.0.0.1', port: int = 8011) -> None:
     import websockets
     clients: set = set()
 
-    async def relay(websocket, path: str) -> None:
+    async def relay(websocket) -> None:
+        path = getattr(websocket.request, 'path', '')
         if path != '/ws/gazebo_frame':
             await websocket.send(json.dumps({'error': 'unknown path'}))
             await websocket.close()
@@ -87,7 +88,9 @@ async def ws_server(host: str = '127.0.0.1', port: int = 8011) -> None:
             # Then stream new frames as they arrive
             while True:
                 try:
-                    frame = _frame_queue.get(timeout=5.0)
+                    # Run blocking queue read in a worker thread so the
+                    # websocket event loop stays responsive to new handshakes.
+                    frame = await asyncio.to_thread(_frame_queue.get, True, 5.0)
                 except queue.Empty:
                     # Send ping to keep connection alive
                     await websocket.ping()

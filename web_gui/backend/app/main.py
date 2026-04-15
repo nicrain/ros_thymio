@@ -98,14 +98,20 @@ async def ws_gazebo_frame(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         import websockets
-        async with websockets.connect(CAMERA_BRIDGE_URL, ping_interval=None) as upstream:
-            while True:
-                data = await upstream.recv()
-                await websocket.send(data)
-    except (websockets.exceptions.InvalidURI, websockets.exceptions.ConnectionClosedError):
-        await websocket.send_json({"error": "camera_bridge_unavailable"})
-    except OSError:
-        await websocket.send_json({"error": "camera_bridge_offline"})
+        while True:
+            try:
+                async with websockets.connect(CAMERA_BRIDGE_URL, ping_interval=None) as upstream:
+                    while True:
+                        data = await upstream.recv()
+                        if isinstance(data, bytes):
+                            await websocket.send_bytes(data)
+                        else:
+                            await websocket.send_text(data)
+            except websockets.exceptions.InvalidURI:
+                await websocket.send_json({"error": "camera_bridge_unavailable"})
+                return
+            except (OSError, websockets.exceptions.ConnectionClosedError):
+                await asyncio.sleep(0.5)
     except WebSocketDisconnect:
         return
 

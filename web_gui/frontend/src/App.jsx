@@ -51,24 +51,41 @@ function CameraPanel() {
 
   useEffect(() => {
     const wsUrl = (import.meta.env.VITE_API_BASE || '').replace(/^http/, 'ws') + '/ws/gazebo_frame';
-    const ws = new WebSocket(wsUrl);
-    camWsRef.current = ws;
+    let cancelled = false;
+    let retryTimer = null;
 
-    ws.onopen  = () => { setCamWsConnected(true); setCamError(null); };
-    ws.onclose = () => { setCamWsConnected(false); };
-    ws.onerror = () => { setCamError('connection error'); };
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.error) {
-        setCamError(data.error);
-        return;
-      }
-      if (data.image) {
-        setFrame(`data:image/jpeg;base64,${data.image}`);
-        setCamError(null);
-      }
+    const connect = () => {
+      if (cancelled) return;
+      const ws = new WebSocket(wsUrl);
+      camWsRef.current = ws;
+
+      ws.onopen  = () => { setCamWsConnected(true); setCamError(null); };
+      ws.onclose = () => {
+        setCamWsConnected(false);
+        if (!cancelled) {
+          retryTimer = window.setTimeout(connect, 1000);
+        }
+      };
+      ws.onerror = () => { setCamError('connection error'); };
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.error) {
+          setCamError(data.error);
+          return;
+        }
+        if (data.image) {
+          setFrame(`data:image/jpeg;base64,${data.image}`);
+          setCamError(null);
+        }
+      };
     };
-    return () => ws.close();
+
+    connect();
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      if (camWsRef.current) camWsRef.current.close();
+    };
   }, []);
 
   return (
@@ -285,7 +302,7 @@ export default function App() {
       },
       launch: {
         use_sim:           isSim,
-        use_gui:           isSim,
+        use_gui:           false,
         run_eeg:           inputMode === 'eeg' || inputMode === 'mock',
         run_gaze:          inputMode === 'tobii',
         use_teleop:        inputMode === 'teleop',
@@ -314,7 +331,7 @@ export default function App() {
   async function startSystem() {
     try {
       await saveConfig();
-      await runAction('/api/system/start', true);
+      await runAction('/api/system/start', false);
     } catch (err) {
       if (!String(err?.message || err).includes('Save failed')) {
         setFeedback(`Start failed: ${err.message}`);
