@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: thymio-web-bridge
+Version: 0.1.0
+Summary: Bridges Gazebo camera image from ROS2 to FastAPI WebSocket
+Maintainer: robot
+Maintainer-email: robot@example.com
+License: MIT

@@ -1,0 +1,14 @@
+package.xml
+setup.cfg
+setup.py
+launch/camera_bridge.launch.py
+resource/thymio_web_bridge
+thymio_web_bridge/__init__.py
+thymio_web_bridge/gazebo_camera_bridge.py
+thymio_web_bridge.egg-info/PKG-INFO
+thymio_web_bridge.egg-info/SOURCES.txt
+thymio_web_bridge.egg-info/dependency_links.txt
+thymio_web_bridge.egg-info/entry_points.txt
+thymio_web_bridge.egg-info/requires.txt
+thymio_web_bridge.egg-info/top_level.txt
+thymio_web_bridge.egg-info/zip-safe

@@ -17,11 +17,12 @@ class LaunchConfig(BaseModel):
 
 
 class EegConfig(BaseModel):
-    input: Literal["mock", "tcp_client", "lsl", "file"] = "mock"
+    input: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
     policy: Literal["focus", "theta_beta"] = "focus"
     tcp_control_mode: Literal["feature", "movement"] = "feature"
     tcp_host: str = "127.0.0.1"
     tcp_port: int = 6001
+    file_path: str = ""
     lsl_stream_type: str = "EEG"
     lsl_timeout: float = 8.0
     lsl_channel_map: str = "alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4"

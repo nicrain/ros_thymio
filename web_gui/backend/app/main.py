@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -16,9 +17,19 @@ from .ros_probe import probe_system
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
 frontend_origin = os.getenv("WEB_GUI_FRONTEND_ORIGIN", "http://localhost:5173")
+
+def _validate_origin(origin: str) -> bool:
+    """Validate origin has http/https scheme and matches allowed list."""
+    if not origin or not isinstance(origin, str):
+        return False
+    if not (origin.startswith("http://") or origin.startswith("https://")):
+        return False
+    allowed = [frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"]
+    return origin in allowed
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin, "http://127.0.0.1:5173"],
+    allow_origins=[frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,6 +70,21 @@ def api_start(req: CommandRequest) -> dict[str, Any]:
     return start_system(cfg, dry_run=req.dry_run).model_dump()
 
 
+@app.get("/api/files/tcp")
+async def list_tcp_files() -> dict[str, Any]:
+    """Return list of available TCP data files for playback."""
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parents[3]
+    tcp_dir = repo_root / "enobio_recodes"
+    if not tcp_dir.exists():
+        return {"files": []}
+    txt_files = sorted([
+        f.name for f in tcp_dir.iterdir()
+        if f.is_file() and f.suffix == ".txt"
+    ])
+    return {"files": txt_files}
+
+
 @app.post("/api/system/stop")
 def api_stop(req: CommandRequest) -> dict[str, Any]:
     return stop_system(dry_run=req.dry_run).model_dump()
@@ -93,14 +119,16 @@ CAMERA_BRIDGE_URL = os.getenv("CAMERA_BRIDGE_URL", "ws://127.0.0.1:8011/ws/gazeb
 
 @app.websocket("/ws/gazebo_frame")
 async def ws_gazebo_frame(websocket: WebSocket) -> None:
-    """Proxy WebSocket → upstream camera bridge. Falls back gracefully if bridge
-    is not running (e.g. Gazebo not started yet)."""
+    """Proxy WebSocket → upstream camera bridge with exponential backoff.
+    Falls back gracefully if bridge is not running (e.g. Gazebo not started yet)."""
     await websocket.accept()
+    backoff = 0.1  # Start with 100ms backoff
     try:
         import websockets
         while True:
             try:
                 async with websockets.connect(CAMERA_BRIDGE_URL, ping_interval=None) as upstream:
+                    backoff = 0.1  # Reset on successful connection
                     while True:
                         data = await upstream.recv()
                         if isinstance(data, bytes):
@@ -111,7 +139,8 @@ async def ws_gazebo_frame(websocket: WebSocket) -> None:
                 await websocket.send_json({"error": "camera_bridge_unavailable"})
                 return
             except (OSError, websockets.exceptions.ConnectionClosedError):
-                await asyncio.sleep(0.5)
+                backoff = min(backoff * 2, 30.0)  # Exponential backoff, max 30s
+                await asyncio.sleep(backoff)
     except WebSocketDisconnect:
         return
 

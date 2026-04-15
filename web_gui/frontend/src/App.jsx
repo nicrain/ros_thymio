@@ -284,18 +284,19 @@ export default function App() {
   function buildPatch() {
     const inputMap = {
       mock:    'mock',
-      eeg:     eegProtocol === 'tcp' ? 'tcp_client' : eegProtocol === 'lsl' ? 'lsl' : 'file',
+      eeg:     eegProtocol === 'tcp' ? 'tcp_client' : eegProtocol === 'tcp_file' ? 'tcp_file' : eegProtocol === 'lsl' ? 'lsl' : 'file',
       tobii:   'lsl',
       teleop:  'tcp_client',
     };
     const isSim = outputMode === 'thymio_simu';
-    return {
+    const patch = {
       eeg: {
         input:           inputMap[inputMode] || 'mock',
         policy:          'focus',
         tcp_control_mode: 'feature',
         tcp_host:        '127.0.0.1',
         tcp_port:        1234,
+        file_path:       filePath,
         lsl_stream_type: 'EEG',
         lsl_timeout:     8.0,
         lsl_channel_map: 'alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4',
@@ -315,6 +316,7 @@ export default function App() {
         algorithm:         'theta_beta_ratio',
       },
     };
+    return patch;
   }
 
   /* ── Actions ─────────────────────────────────────────── */

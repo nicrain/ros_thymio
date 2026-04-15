@@ -12,6 +12,7 @@
 
 import argparse
 import json
+import logging
 import math
 import socket
 import time
@@ -63,8 +64,8 @@ class BaseAdapter:
         raise NotImplementedError
 
 
-def _parse_sod_packet(packet: str) -> Dict[str, float]:
-    """解析 SOD...EOD 包，提取序号、特征数、运动值和特征值。"""
+def parse_sod_packet(packet: str) -> Dict[str, float]:
+    """解析 SOD...EOD 包，提取序号、特征数、运动值和特征值。可复用于 TcpFileAdapter。"""
 
     packet = packet.strip()
     if not packet.startswith("SOD") or not packet.endswith("EOD"):
@@ -122,6 +123,11 @@ def _parse_sod_packet(packet: str) -> Dict[str, float]:
         metrics["feature_value"] = metrics["feature_1"]
 
     return metrics
+
+
+# Backward compatibility alias
+def _parse_sod_packet(packet: str) -> Dict[str, float]:
+    return parse_sod_packet(packet)
 
 
 def extract_tcp_feature(packet: str) -> float:
@@ -257,12 +263,12 @@ class TcpClientJsonAdapter(BaseAdapter):
         if now - self._last_connect_attempt < self._reconnect_sec:
             return
 
-        self._last_connect_attempt = now
         try:
             sock = socket.create_connection((self._host, self._port), timeout=2.0)
             sock.setblocking(False)
             self._sock = sock
-            print(f"[tcp-client] connected to {self._host}:{self._port}")
+            self._last_connect_attempt = now
+            logging.getLogger(__name__).info(f"connected to {self._host}:{self._port}")
         except Exception:
             self._sock = None
 
@@ -300,7 +306,7 @@ class TcpClientJsonAdapter(BaseAdapter):
             try:
                 data = self._sock.recv(4096)
                 if not data:
-                    print(f"[tcp-client] disconnected from {self._host}:{self._port}")
+                    logging.getLogger(__name__).info(f"disconnected from {self._host}:{self._port}")
                     self._close_socket()
                     return False
                 self._buf += data.decode("utf-8", errors="ignore")
@@ -323,6 +329,8 @@ class TcpClientJsonAdapter(BaseAdapter):
             return None
 
         # 丢弃旧包，仅保留本周期最后一个结构完整且可解析的包
+        if len(packets) > 1:
+            logging.getLogger(__name__).warning(f"buffer truncation: discarded {len(packets)-1} old packets")
         for packet in reversed(packets):
             metrics = _parse_sod_packet(packet)
             if metrics:
@@ -351,8 +359,8 @@ class LslAdapter(BaseAdapter):
         self._inlet = StreamInlet(streams[0], max_chunklen=32)
         self._channel_map = channel_map
         info = self._inlet.info()
-        print(
-            f"[lsl] connected stream name={info.name()} type={info.type()} channels={info.channel_count()}"
+        logging.getLogger(__name__).info(
+            f"connected stream name={info.name()} type={info.type()} channels={info.channel_count()}"
         )
 
     def read_frame(self) -> Optional[EegFrame]:
@@ -363,13 +371,80 @@ class LslAdapter(BaseAdapter):
         arr = [float(v) for v in sample]
         metrics: Dict[str, float] = {}
         for name, idx in self._channel_map.items():
-            if 0 <= idx < len(arr):
-                metrics[name] = arr[idx]
+            if idx < 0 or idx >= len(arr):
+                raise ValueError(f"LSL channel '{name}' index {idx} out of bounds (array length {len(arr)})")
+            metrics[name] = arr[idx]
 
         if not metrics:
             return None
 
         return EegFrame(ts=time.time(), source="lsl", metrics=metrics)
+
+
+class TcpFileAdapter(BaseAdapter):
+    """从 TCP 数据文件回放，按时间戳控制节奏。
+    
+    文件格式：每行 "timestamp SOD...EOD" 或 "timestamp SOC...EOC"
+    """
+
+    def __init__(self, file_path: str) -> None:
+        self._file_path = file_path
+        self._lines: list[str] = []
+        self._index = 0
+        self._last_ts: float = 0.0
+        self._done = False
+        self._load_file()
+
+    def _load_file(self) -> None:
+        with open(self._file_path, "r", encoding="utf-8") as f:
+            self._lines = f.readlines()
+
+    def read_frame(self) -> Optional[EegFrame]:
+        if self._done:
+            return None
+
+        while self._index < len(self._lines):
+            line = self._lines[self._index].strip()
+            self._index += 1
+            if not line:
+                continue
+
+            # 提取行首时间戳（Unix 时间戳，秒）
+            parts = line.split(" ", 1)
+            if len(parts) < 2:
+                continue
+            try:
+                ts = float(parts[0])
+            except ValueError:
+                continue
+
+            payload = parts[1]
+
+            # 过滤 SOC/EOC 控制帧，只处理 SOD/EOD 数据帧
+            if "SOD" not in payload or "EOD" not in payload:
+                continue
+
+            start = payload.find("SOD")
+            end = payload.find("EOD")
+            if start < 0 or end < 0 or end <= start:
+                continue
+
+            packet = payload[start:end + 3]  # 包含 SOD...EOD
+            metrics = parse_sod_packet(packet)
+            if not metrics:
+                continue
+
+            # 按时间戳差控制播放节奏
+            if self._last_ts > 0:
+                sleep_sec = ts - self._last_ts
+                if sleep_sec > 0:
+                    time.sleep(sleep_sec)
+
+            self._last_ts = ts
+            return EegFrame(ts=time.time(), source="tcp_file", metrics=metrics)
+
+        self._done = True
+        return None
 
 
 def enrich_features(metrics: Dict[str, float]) -> Dict[str, float]:
@@ -545,7 +620,10 @@ def parse_channel_map(text: Any) -> Dict[str, int]:
     out: Dict[str, int] = {}
     if isinstance(text, dict):
         for k, v in text.items():
-            out[str(k)] = int(v)
+            idx = int(v)
+            if idx < 0:
+                raise ValueError(f"channel map index must be non-negative: {k}={idx}")
+            out[str(k)] = idx
         return out
     if not text:
         return out
@@ -554,7 +632,10 @@ def parse_channel_map(text: Any) -> Dict[str, int]:
         if not item or "=" not in item:
             continue
         k, v = item.split("=", 1)
-        out[k.strip()] = int(v.strip())
+        idx = int(v.strip())
+        if idx < 0:
+            raise ValueError(f"channel map index must be non-negative: {k}={idx}")
+        out[k.strip()] = idx
     return out
 
 
@@ -656,7 +737,7 @@ class KeyboardAdapter(BaseAdapter):
         self.metrics = {"alpha": 0.5, "theta": 0.5, "beta": 0.5, "left_alpha": 0.5, "right_alpha": 0.5}
         self.speed_intent = 0.5
         self.steer_intent = 0.5
-        print("[keyboard] Initialized. Use W/S/A/D to simulate EEG intent, Space to reset.")
+        logging.getLogger(__name__).info("Initialized. Use W/S/A/D to simulate EEG intent, Space to reset.")
 
     def read_frame(self) -> Optional[EegFrame]:
         return EegFrame(
@@ -673,6 +754,11 @@ def build_adapter(args: Any) -> BaseAdapter:
         return KeyboardAdapter()
     if args.input == "tcp_client":
         return TcpClientJsonAdapter(args.tcp_host, args.tcp_port)
+    if args.input == "tcp_file":
+        file_path = getattr(args, "file_path", "")
+        if not file_path:
+            raise RuntimeError("tcp_file mode requires --file-path")
+        return TcpFileAdapter(file_path)
     if args.input == "lsl":
         channel_map = parse_channel_map(args.lsl_channel_map)
         if not channel_map:
@@ -704,11 +790,12 @@ def run_offline_file_pipeline(args: argparse.Namespace, pipeline_config: Dict[st
 def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
-    parser.add_argument("--input", choices=["mock", "tcp_client", "lsl", "file"], default="mock")
+    parser.add_argument("--input", choices=["mock", "tcp_client", "tcp_file", "lsl", "file"], default="mock")
     parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
 
     parser.add_argument("--tcp-host", default="0.0.0.0", help="TCP client connect host")
     parser.add_argument("--tcp-port", type=int, default=6001, help="TCP client connect port")
+    parser.add_argument("--file-path", default="", help="Path to TCP data file for replay")
 
     parser.add_argument("--lsl-stream-type", default="EEG", help="LSL stream type")
     parser.add_argument("--lsl-timeout", type=float, default=8.0, help="LSL discovery timeout")
@@ -727,13 +814,13 @@ def main() -> int:
 
     if args.config:
         if yaml is None:
-            print("ERROR: PyYAML is required to load config")
+            logging.getLogger(__name__).error("PyYAML is required to load config")
             return 1
         try:
             cfg = load_yaml_config(args.config)
             args = apply_config_to_args(args, parser, cfg)
         except Exception as e:
-            print(f"ERROR: cannot load config: {e}")
+            logging.getLogger(__name__).error(f"cannot load config: {e}")
             return 1
 
     pipeline_config = extract_pipeline_config(cfg)
@@ -741,40 +828,38 @@ def main() -> int:
         try:
             return run_offline_file_pipeline(args, pipeline_config, args.config)
         except Exception as e:
-            print(f"ERROR: cannot run offline file pipeline: {e}")
+            logging.getLogger(__name__).error(f"cannot run offline file pipeline: {e}")
             return 1
 
     adapter = build_adapter(args)
     policy = POLICIES[args.policy]()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.udp_host, int(args.udp_port))
-
     hz = float(args.hz)
     period = 1.0 / max(1.0, hz)
-
     is_polling_adapter = isinstance(adapter, (MockAdapter, KeyboardAdapter))
 
-    try:
-        while True:
-            frame = adapter.read_frame()
-            if frame is not None:
-                feats = enrich_features(frame.metrics)
-                intents = policy.compute_intents(feats)
-                payload = json.dumps(intents).encode()
-                sock.sendto(payload, target)
-                if args.verbose:
-                    print(f"[eeg-pipeline] sent {intents}")
-                
-                if is_polling_adapter:
-                    time.sleep(period)
-                    continue
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        try:
+            while True:
+                frame = adapter.read_frame()
+                if frame is not None:
+                    feats = enrich_features(frame.metrics)
+                    intents = policy.compute_intents(feats)
+                    payload = json.dumps(intents).encode()
+                    sock.sendto(payload, target)
+                    if args.verbose:
+                        logging.getLogger(__name__).info(f"sent {intents}")
+                    
+                    if is_polling_adapter:
+                        time.sleep(period)
+                        continue
 
-            if not is_polling_adapter:
-                # Polling interval of 2ms gives <2ms delay for network adapters
-                time.sleep(0.002)
-    except KeyboardInterrupt:
-        pass
+                if not is_polling_adapter:
+                    # Polling interval of 2ms gives <2ms delay for network adapters
+                    time.sleep(0.002)
+        except KeyboardInterrupt:
+            pass
 
     return 0
 

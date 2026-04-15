@@ -33,6 +33,7 @@ class _AdapterArgs:
 		lsl_stream_type: str,
 		lsl_timeout: float,
 		lsl_channel_map,
+		file_path: str,
 	):
 		self.input = input_mode
 		self.tcp_host = tcp_host
@@ -40,6 +41,7 @@ class _AdapterArgs:
 		self.lsl_stream_type = lsl_stream_type
 		self.lsl_timeout = lsl_timeout
 		self.lsl_channel_map = lsl_channel_map
+		self.file_path = file_path
 
 
 class EegControlNode(Node):
@@ -52,6 +54,7 @@ class EegControlNode(Node):
 		self.declare_parameter("tcp_control_mode", "movement")
 		self.declare_parameter("tcp_host", "0.0.0.0")
 		self.declare_parameter("tcp_port", 6001)
+		self.declare_parameter("file_path", "")
 		self.declare_parameter("lsl_stream_type", "EEG")
 		self.declare_parameter("lsl_timeout", 8.0)
 		self.declare_parameter("lsl_channel_map", "alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4")
@@ -89,6 +92,7 @@ class EegControlNode(Node):
 			lsl_stream_type=self.get_parameter("lsl_stream_type").value,
 			lsl_timeout=float(self.get_parameter("lsl_timeout").value),
 			lsl_channel_map=self.get_parameter("lsl_channel_map").value,
+			file_path=self.get_parameter("file_path").value,
 		)
 		self.adapter = build_adapter(adapter_args)
 		self.policy = POLICIES[policy_name]()
@@ -101,12 +105,12 @@ class EegControlNode(Node):
 		self.analysis_verbose = bool(self.get_parameter("analysis_verbose").value)
 		self.record_csv = bool(self.get_parameter("record_csv").value)
 		self.csv_path = str(self.get_parameter("csv_path").value)
-		self.max_forward_speed = float(self.get_parameter("max_forward_speed").value)
-		self.reverse_speed = float(self.get_parameter("reverse_speed").value)
-		self.turn_forward_speed = float(self.get_parameter("turn_forward_speed").value)
-		self.turn_angular_speed = float(self.get_parameter("turn_angular_speed").value)
-		self.reverse_threshold = float(self.get_parameter("reverse_threshold").value)
-		self.steer_deadzone = float(self.get_parameter("steer_deadzone").value)
+		self.max_forward_speed = min(1.0, max(0.0, float(self.get_parameter("max_forward_speed").value)))
+		self.reverse_speed = min(0.0, max(-1.0, float(self.get_parameter("reverse_speed").value)))
+		self.turn_forward_speed = min(1.0, max(0.0, float(self.get_parameter("turn_forward_speed").value)))
+		self.turn_angular_speed = min(3.0, max(0.0, float(self.get_parameter("turn_angular_speed").value)))
+		self.reverse_threshold = min(1.0, max(0.0, float(self.get_parameter("reverse_threshold").value)))
+		self.steer_deadzone = min(1.0, max(0.0, float(self.get_parameter("steer_deadzone").value)))
 		self._csv_file = None
 		self._csv_writer = None
 		if self.record_csv:

@@ -48,6 +48,7 @@ def _load_defaults() -> AppConfig:
     cfg.eeg.tcp_control_mode = str(ros_params.get("tcp_control_mode", cfg.eeg.tcp_control_mode))
     cfg.eeg.tcp_host = str(ros_params.get("tcp_host", cfg.eeg.tcp_host))
     cfg.eeg.tcp_port = int(ros_params.get("tcp_port", cfg.eeg.tcp_port))
+    cfg.eeg.file_path = str(ros_params.get("file_path", cfg.eeg.file_path))
     cfg.eeg.lsl_stream_type = str(ros_params.get("lsl_stream_type", cfg.eeg.lsl_stream_type))
     cfg.eeg.lsl_timeout = float(ros_params.get("lsl_timeout", cfg.eeg.lsl_timeout))
     cfg.eeg.lsl_channel_map = str(ros_params.get("lsl_channel_map", cfg.eeg.lsl_channel_map))
@@ -96,6 +97,7 @@ def _persist_config(cfg: AppConfig) -> None:
             "tcp_control_mode": str(cfg.eeg.tcp_control_mode),
             "tcp_host": str(cfg.eeg.tcp_host),
             "tcp_port": int(cfg.eeg.tcp_port),
+            "file_path": str(cfg.eeg.file_path),
             "lsl_stream_type": str(cfg.eeg.lsl_stream_type),
             "lsl_timeout": float(cfg.eeg.lsl_timeout),
             "lsl_channel_map": str(cfg.eeg.lsl_channel_map),
