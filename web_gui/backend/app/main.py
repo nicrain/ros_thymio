@@ -27,6 +27,15 @@ def _validate_origin(origin: str) -> bool:
     allowed = [frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"]
     return origin in allowed
 
+
+async def _reject_invalid_origin(websocket: WebSocket) -> bool:
+    """Reject websocket requests from invalid Origin values."""
+    origin = websocket.headers.get("origin", "")
+    if _validate_origin(origin):
+        return False
+    await websocket.close(code=1008, reason="invalid origin")
+    return True
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[frontend_origin, "http://127.0.0.1:5173", "https://127.0.0.1:5173"],
@@ -92,6 +101,8 @@ def api_stop(req: CommandRequest) -> dict[str, Any]:
 
 @app.websocket("/ws/stream")
 async def ws_stream(websocket: WebSocket) -> None:
+    if await _reject_invalid_origin(websocket):
+        return
     await websocket.accept()
     try:
         while True:
@@ -121,6 +132,8 @@ CAMERA_BRIDGE_URL = os.getenv("CAMERA_BRIDGE_URL", "ws://127.0.0.1:8011/ws/gazeb
 async def ws_gazebo_frame(websocket: WebSocket) -> None:
     """Proxy WebSocket → upstream camera bridge with exponential backoff.
     Falls back gracefully if bridge is not running (e.g. Gazebo not started yet)."""
+    if await _reject_invalid_origin(websocket):
+        return
     await websocket.accept()
     backoff = 0.1  # Start with 100ms backoff
     try:

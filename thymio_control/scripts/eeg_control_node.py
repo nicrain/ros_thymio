@@ -51,7 +51,7 @@ class EegControlNode(Node):
 		# 输入与策略参数
 		self.declare_parameter("input", "mock")
 		self.declare_parameter("policy", "focus")
-		self.declare_parameter("tcp_control_mode", "movement")
+		self.declare_parameter("tcp_control_mode", "feature")
 		self.declare_parameter("tcp_host", "0.0.0.0")
 		self.declare_parameter("tcp_port", 6001)
 		self.declare_parameter("file_path", "")
@@ -159,7 +159,7 @@ class EegControlNode(Node):
 			self.create_subscription(Range, "/ground/right", self._ground_right_cb, 10)
 
 		self.last_msg_ts = 0.0
-		self._adapter_connected = True
+		self._adapter_connected = False
 		self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
 		hz = float(self.get_parameter("publish_hz").value)
@@ -190,7 +190,9 @@ class EegControlNode(Node):
 	def _tick(self) -> None:
 		frame = self.adapter.read_frame()
 		if frame is not None:
-			tcp_control_mode = str(self.get_parameter("tcp_control_mode").value).strip() or "movement"
+			input_mode = str(self.get_parameter("input").value).strip() or "mock"
+			default_mode = "feature" if input_mode == "tcp_file" else "movement"
+			tcp_control_mode = str(self.get_parameter("tcp_control_mode").value).strip() or default_mode
 			movement_value = frame.metrics.get("movement")
 			has_movement = isinstance(movement_value, (int, float))
 			feature_value = frame.metrics.get("feature")

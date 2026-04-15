@@ -1,5 +1,5 @@
 pipeline_config:
-  source_type: tcp_client
+  source_type: tcp_file
   selected_channels:
   - 0
   - 1

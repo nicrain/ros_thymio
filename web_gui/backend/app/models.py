@@ -48,7 +48,7 @@ class MotionConfig(BaseModel):
 
 
 class PipelineConfig(BaseModel):
-    source_type: Literal["mock", "tcp_client", "lsl", "file"] = "mock"
+    source_type: Literal["mock", "tcp_client", "tcp_file", "lsl", "file"] = "mock"
     selected_channels: list[int] = Field(default_factory=lambda: [0, 1, 2])
     algorithm: Literal["theta_beta_ratio", "alpha_beta_ratio", "custom"] = "theta_beta_ratio"
 

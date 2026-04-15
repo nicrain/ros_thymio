@@ -396,7 +396,19 @@ class TcpFileAdapter(BaseAdapter):
         self._load_file()
 
     def _load_file(self) -> None:
-        with open(self._file_path, "r", encoding="utf-8") as f:
+        path = Path(self._file_path).expanduser()
+        if not path.is_absolute():
+            repo_root = Path(__file__).resolve().parents[2]
+            candidate_repo = (repo_root / path).resolve()
+            candidate_recode = (repo_root / "enobio_recodes" / path).resolve()
+            if candidate_repo.exists():
+                path = candidate_repo
+            elif candidate_recode.exists():
+                path = candidate_recode
+            else:
+                path = candidate_repo
+
+        with open(path, "r", encoding="utf-8") as f:
             self._lines = f.readlines()
 
     def read_frame(self) -> Optional[EegFrame]:

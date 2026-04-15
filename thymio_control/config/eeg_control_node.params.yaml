@@ -1,11 +1,11 @@
 /**:
   ros__parameters:
-    input: tcp_client
+    input: tcp_file
     policy: focus
     tcp_control_mode: feature
     tcp_host: 127.0.0.1
     tcp_port: 1234
-    file_path: ''
+    file_path: tcp_data.txt
     lsl_stream_type: EEG
     lsl_timeout: 8.0
     lsl_channel_map: alpha=0,theta=1,beta=2,left_alpha=3,right_alpha=4
