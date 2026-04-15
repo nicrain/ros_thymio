@@ -113,6 +113,8 @@ class EegControlNode(Node):
 		self.steer_deadzone = min(1.0, max(0.0, float(self.get_parameter("steer_deadzone").value)))
 		self._csv_file = None
 		self._csv_writer = None
+		self._csv_flush_counter = 0
+		self._csv_flush_every_n = 10  # flush every 10 frames, not every frame
 		if self.record_csv:
 			csv_dir = os.path.dirname(self.csv_path)
 			if csv_dir:
@@ -157,6 +159,7 @@ class EegControlNode(Node):
 			self.create_subscription(Range, "/ground/right", self._ground_right_cb, 10)
 
 		self.last_msg_ts = 0.0
+		self._adapter_connected = True
 		self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 
 		hz = float(self.get_parameter("publish_hz").value)
@@ -173,8 +176,8 @@ class EegControlNode(Node):
 		if self._csv_file is not None:
 			try:
 				self._csv_file.close()
-			except Exception:
-				pass
+			except Exception as e:
+				self.get_logger().error(f"Failed to close CSV file: {e}")
 			self._csv_file = None
 			self._csv_writer = None
 
@@ -199,6 +202,7 @@ class EegControlNode(Node):
 			else:
 				self.last_intents = {"speed_intent": 0.5, "steer_intent": 0.5}
 			self.last_msg_ts = time.time()
+			self._adapter_connected = True
 			control_mode = "band_features"
 			command_linear_x = 0.0
 			command_angular_z = 0.0
@@ -246,7 +250,10 @@ class EegControlNode(Node):
 						"steer_intent": self.last_intents.get("steer_intent", 0.5),
 					}
 					self._csv_writer.writerow(row)
-					self._csv_file.flush()
+					self._csv_flush_counter += 1
+					if self._csv_flush_counter >= self._csv_flush_every_n:
+						self._csv_file.flush()
+						self._csv_flush_counter = 0
 				if self.verbose:
 					self.get_logger().info(
 						(
@@ -315,7 +322,10 @@ class EegControlNode(Node):
 						"steer_intent": self.last_intents.get("steer_intent", 0.5),
 					}
 					self._csv_writer.writerow(row)
-					self._csv_file.flush()
+					self._csv_flush_counter += 1
+					if self._csv_flush_counter >= self._csv_flush_every_n:
+						self._csv_file.flush()
+						self._csv_flush_counter = 0
 				if self.verbose:
 					self.get_logger().info(
 						(
@@ -366,7 +376,10 @@ class EegControlNode(Node):
 					"steer_intent": self.last_intents.get("steer_intent", 0.5),
 				}
 				self._csv_writer.writerow(row)
-				self._csv_file.flush()
+				self._csv_flush_counter += 1
+				if self._csv_flush_counter >= self._csv_flush_every_n:
+					self._csv_file.flush()
+					self._csv_flush_counter = 0
 			if not has_band_features:
 				self.pub.publish(Twist())
 				return
@@ -389,7 +402,9 @@ class EegControlNode(Node):
 			return
 
 		if time.time() - self.last_msg_ts > self.watchdog_sec:
-			self.pub.publish(Twist())
+			if self._adapter_connected:
+				self._adapter_connected = False
+				self.pub.publish(Twist())
 			return
 
 		if getattr(self, "last_mode", "intents") in ("movement", "feature"):
@@ -457,8 +472,8 @@ def main(args: Optional[list] = None) -> None:
 	try:
 		rclpy.spin(node)
 	finally:
-		node.destroy_node()
 		node._close_csv()
+		node.destroy_node()
 		try:
 			rclpy.shutdown()
 		except Exception:
