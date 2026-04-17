@@ -16,18 +16,13 @@ from .mock_stream import MockSignalGenerator
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
 from .teleop_publisher import (
-    _TeleopPublisher,
-    _IS_LINUX,
+    IS_LINUX,
     publish_twist_async,
     TELEOP_DIRECTIONS,
 )
 
 logger = logging.getLogger("teleop_publisher")
-logger.info(
-    "teleop_publisher platform=%s publisher=%s",
-    sys.platform,
-    _TeleopPublisher.__name__,
-)
+logger.info("teleop_publisher platform=%s IS_LINUX=%s", sys.platform, IS_LINUX)
 
 # Configure logging so teleop_publisher debug output is visible
 logging.basicConfig(
