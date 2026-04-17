@@ -784,6 +784,25 @@ body {
   font-size: 14px;
 }
 
+/* ── Camera + Teleop row (side-by-side) ─────────── */
+.camera-teleop-row {
+  display: flex;
+  gap: 16px;
+  padding: 0 32px 0;
+  background: var(--f-dark-bg);
+  border-top: 1px solid #222;
+}
+.camera-teleop-row .camera-panel {
+  flex: 1 1 auto;
+  border: none;
+}
+.camera-teleop-row .teleop-panel {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  padding: 16px 0 16px;
+}
+
 /* ── Teleop Panel ─────────────────────────────────── */
 .teleop-panel {
   background: var(--f-white);
