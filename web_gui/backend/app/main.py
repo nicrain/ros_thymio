@@ -13,6 +13,7 @@ from .config_store import get_config_envelope, init_store, patch_config
 from .mock_stream import MockSignalGenerator
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
+from .teleop_publisher import publish_twist_async, TELEOP_DIRECTIONS
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
@@ -154,6 +155,52 @@ async def ws_gazebo_frame(websocket: WebSocket) -> None:
             except (OSError, websockets.exceptions.ConnectionClosedError):
                 backoff = min(backoff * 2, 30.0)  # Exponential backoff, max 30s
                 await asyncio.sleep(backoff)
+    except WebSocketDisconnect:
+        return
+
+
+# --------------------------------------------------------------------------- #
+# /ws/teleop — receives directional commands from the web UI and publishes
+# Twist messages to /cmd_vel (real robot) or /model/thymio/cmd_vel (sim).
+# Expected message format: { "direction": "forward" | "backward" | "left" | "right" | "stop" }
+# --------------------------------------------------------------------------- #
+
+
+@app.websocket("/ws/teleop")
+async def ws_teleop(websocket: WebSocket) -> None:
+    """WebSocket teleop endpoint: receives direction commands and publishes Twist."""
+    if await _reject_invalid_origin(websocket):
+        return
+    await websocket.accept()
+
+    cfg = get_config_envelope().config
+    use_sim = cfg.launch.use_sim
+
+    # Send initial config so the client knows which topic is in use.
+    await websocket.send_json({
+        "type": "config",
+        "use_sim": use_sim,
+        "topic": "/model/thymio/cmd_vel" if use_sim else "/cmd_vel",
+    })
+
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            direction = msg.get("direction", "")
+            if direction not in TELEOP_DIRECTIONS:
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": f"Unknown direction: {direction!r}. "
+                              f"Valid: {sorted(TELEOP_DIRECTIONS)}",
+                })
+                continue
+
+            ok, detail = await publish_twist_async(direction, use_sim, cfg)
+            await websocket.send_json({
+                "type": "ack" if ok else "error",
+                "direction": direction,
+                "detail": detail,
+            })
     except WebSocketDisconnect:
         return
 

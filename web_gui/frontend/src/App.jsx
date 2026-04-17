@@ -109,6 +109,86 @@ function CameraPanel() {
   );
 }
 
+/* ── Teleop Panel (directional controls) ───────────── */
+const DIR_LABELS = {
+  forward:  '▲',
+  backward: '▼',
+  left:     '◀',
+  right:    '▶',
+  stop:     '■',
+};
+
+const DIR_KEY_MAP = {
+  ArrowUp:    'forward',
+  KeyW:       'forward',
+  ArrowDown:  'backward',
+  KeyS:       'backward',
+  ArrowLeft:  'left',
+  KeyA:       'left',
+  ArrowRight: 'right',
+  KeyD:       'right',
+};
+
+function TeleopPanel({ teleopWsRef, topic, connected }) {
+  const [activeDir, setActiveDir] = useState(null);
+  const [ackMsg, setAckMsg] = useState('');
+
+  function send(dir) {
+    if (!teleopWsRef.current || teleopWsRef.current.readyState !== WebSocket.OPEN) return;
+    teleopWsRef.current.send(JSON.stringify({ direction: dir }));
+  }
+
+  function handleDirDown(dir) {
+    setActiveDir(dir);
+    send(dir);
+  }
+
+  function handleDirUp() {
+    setActiveDir(null);
+    send('stop');
+  }
+
+  const dirs = [
+    { dir: 'forward',  row: 0, col: 1 },
+    { dir: 'left',      row: 1, col: 0 },
+    { dir: 'stop',      row: 1, col: 1 },
+    { dir: 'right',     row: 1, col: 2 },
+    { dir: 'backward', row: 2, col: 1 },
+  ];
+
+  return (
+    <div className="teleop-panel">
+      <div className="teleop-header">
+        <span className="section-label">03 — Teleop Controls</span>
+        <span className={`teleop-ws-status ${connected ? 'ok' : 'warn'}`}>
+          {connected ? `WS connected — ${topic}` : 'WS disconnected'}
+        </span>
+      </div>
+      <div
+        className="teleop-grid"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 60px)', gridTemplateRows: 'repeat(3, 60px)', gap: 4 }}
+      >
+        {dirs.map(({ dir, row, col }) => (
+          <button
+            key={dir}
+            className={`teleop-btn${activeDir === dir ? ' active' : ''}`}
+            style={{ gridRow: row + 1, gridColumn: col + 1 }}
+            onMouseDown={() => handleDirDown(dir)}
+            onMouseUp={handleDirUp}
+            onMouseLeave={activeDir === dir ? handleDirUp : undefined}
+            onTouchStart={(e) => { e.preventDefault(); handleDirDown(dir); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleDirUp(); }}
+          >
+            {DIR_LABELS[dir]}
+          </button>
+        ))}
+      </div>
+      {ackMsg && <div className="teleop-ack">{ackMsg}</div>}
+      <div className="teleop-hint">Use WASD or arrow keys · Click/tap buttons above</div>
+    </div>
+  );
+}
+
 /* ── Sub Radio group ──────────────────────────────────── */
 function SubRadio({ options, value, onChange }) {
   return (
@@ -196,6 +276,9 @@ export default function App() {
   const [showWaveform, setShowWaveform]     = useState(true);
 
   const wsRef = useRef(null);
+  const teleopWsRef = useRef(null);
+  const teleopTopicRef = useRef('/cmd_vel');
+  const [teleopConnected, setTeleopConnected] = useState(false);
 
   /* ── Derived ────────────────────────────────────────── */
   const isControlMode = inputMode === 'teleop' || inputMode === 'tobii';
@@ -232,6 +315,55 @@ export default function App() {
     };
     return () => ws.close();
   }, [isControlMode]);
+
+  /* ── Teleop WebSocket + keyboard ─────────────────────── */
+  useEffect(() => {
+    if (inputMode !== 'teleop') {
+      if (teleopWsRef.current) teleopWsRef.current.close();
+      return;
+    }
+
+    const wsUrl = (import.meta.env.VITE_API_BASE || '').replace(/^http/, 'ws') + '/ws/teleop';
+    const ws = new WebSocket(wsUrl);
+    teleopWsRef.current = ws;
+
+    ws.onopen = () => setTeleopConnected(true);
+    ws.onclose = () => setTeleopConnected(false);
+    ws.onerror = () => setTeleopConnected(false);
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'config') {
+        teleopTopicRef.current = data.topic;
+        setTeleopConnected(true);
+      }
+    };
+
+    function handleKeyDown(e) {
+      const dir = DIR_KEY_MAP[e.code];
+      if (!dir) return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+      }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ direction: dir }));
+      }
+    }
+
+    function handleKeyUp() {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ direction: 'stop' }));
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      ws.close();
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [inputMode]);
 
   /* ── ECharts options (light theme for white panel) ──── */
   const waveOption = useMemo(() => ({
@@ -496,26 +628,34 @@ export default function App() {
       {/* ── SECTION 2b: Gazebo Camera Stream ─────────────── */}
       {outputMode === 'thymio_simu' && <CameraPanel />}
 
-      {/* ── SECTION 3: Waveforms (White editorial panel) ─ */}
-      <div className="section-light">
-        <span className="section-label">03 — Real-time Signals</span>
-        <h2 className="section-heading">Signal Monitoring</h2>
+      {/* ── SECTION 3: Teleop OR Waveforms ───────────────── */}
+      {inputMode === 'teleop' ? (
+        <TeleopPanel
+          teleopWsRef={teleopWsRef}
+          topic={teleopTopicRef.current}
+          connected={teleopConnected}
+        />
+      ) : (
+        <div className="section-light">
+          <span className="section-label">03 — Real-time Signals</span>
+          <h2 className="section-heading">Signal Monitoring</h2>
 
-        <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`}>
-          <div className="chart-card">
-            <h3>Raw Wave &mdash; alpha / theta / beta</h3>
-            <ReactECharts option={waveOption} style={{ height: 220 }} />
-          </div>
-          <div className="chart-card">
-            <h3>Feature Trends</h3>
-            <ReactECharts option={featureOption} style={{ height: 220 }} />
-          </div>
-          <div className="chart-card">
-            <h3>Control Intents</h3>
-            <ReactECharts option={controlOption} style={{ height: 220 }} />
+          <div className={`charts-grid${!showWaveform || isControlMode ? ' dimmed' : ''}`}>
+            <div className="chart-card">
+              <h3>Raw Wave &mdash; alpha / theta / beta</h3>
+              <ReactECharts option={waveOption} style={{ height: 220 }} />
+            </div>
+            <div className="chart-card">
+              <h3>Feature Trends</h3>
+              <ReactECharts option={featureOption} style={{ height: 220 }} />
+            </div>
+            <div className="chart-card">
+              <h3>Control Intents</h3>
+              <ReactECharts option={controlOption} style={{ height: 220 }} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Footer ────────────────────────────────────── */}
       <footer className="footer">

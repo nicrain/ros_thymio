@@ -783,3 +783,66 @@ body {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 14px;
 }
+
+/* ── Teleop Panel ─────────────────────────────────── */
+.teleop-panel {
+  background: var(--f-white);
+  border-top: 1px solid #eee;
+  padding: 24px 32px 20px;
+}
+
+.teleop-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.teleop-ws-status {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.teleop-ws-status.ok  { background: #e6f4ea; color: #1e6b3c; }
+.teleop-ws-status.warn { background: #fce8e6; color: #c53030; }
+
+.teleop-grid {
+  display: grid;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.teleop-btn {
+  width: 60px;
+  height: 60px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  background: #f5f5f5;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.teleop-btn:hover  { background: #e8e8e8; }
+.teleop-btn.active { background: #333; color: #fff; }
+
+.teleop-ack {
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--f-dark-gray);
+  margin-top: 8px;
+}
+
+.teleop-hint {
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 12px;
+}
