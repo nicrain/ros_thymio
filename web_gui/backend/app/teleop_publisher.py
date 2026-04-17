@@ -53,10 +53,12 @@ def _get_ros_env() -> dict[str, str]:
     global _ros_env
     if _ros_env is not None:
         return _ros_env
+    logger.info("_get_ros_env: sourcing ROS env (may take a moment on first call)")
     try:
         raw = subprocess.check_output(
             ["bash", "-lc", _source_prefix() + " && env -0"],
             stderr=subprocess.DEVNULL,
+            timeout=30,
         )
         env: dict[str, str] = {}
         for entry in raw.split(b"\0"):
@@ -134,6 +136,7 @@ class _TeleopPublisherRclpy:
         self._start_error: Optional[str] = None
 
     def _run(self) -> None:
+        logger.info("_TeleopPublisherRclpy._run: starting (topic=%s)", self._topic)
         try:
             import rclpy
             from geometry_msgs.msg import Twist
@@ -192,6 +195,7 @@ class _TeleopPublisherRclpy:
         with _lock:
             if _publisher is not None:
                 _publisher.stop()
+        logger.info("_TeleopPublisherRclpy.start: launching background thread")
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -290,7 +294,9 @@ def ensure_publisher(use_sim: bool, cfg: AppConfig) -> object:
         if _publisher is not None and _publisher._use_sim == use_sim:
             return _publisher
         if _publisher is not None:
+            logger.info("ensure_publisher: stopping old publisher")
             _publisher.stop()
+        logger.info("ensure_publisher: creating new %s for use_sim=%s", _TeleopPublisher.__name__, use_sim)
         _publisher = _TeleopPublisher(use_sim, cfg)
         _publisher.start()
         return _publisher
