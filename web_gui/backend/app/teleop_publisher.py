@@ -1,9 +1,9 @@
 """
-Persistent ROS2 publisher for teleop Twist messages.
+ROS2 Twist publisher for teleop commands.
 
-On Linux (WSL), uses a persistent rclpy node in a background thread for
-low-latency publishes.  On other platforms (macOS), falls back to
-`ros2 topic pub --once` subprocess calls.
+On first call, sources ROS2 environment variables and spawns a background
+thread that keeps a rclpy node alive for low-latency Twist publishes.
+Falls back to `ros2 topic pub --once` subprocess if rclpy fails to init.
 """
 
 from __future__ import annotations
@@ -22,10 +22,7 @@ from .models import AppConfig
 
 logger = logging.getLogger("teleop_publisher")
 
-# ── Platform detection ────────────────────────────────────────────────────────
-_IS_LINUX = sys.platform.startswith("linux")
-
-# ── Constants ────────────────────────────────────────────────────────────────
+IS_LINUX = sys.platform.startswith("linux")
 TELEOP_DIRECTIONS = {"forward", "backward", "left", "right", "stop"}
 
 _publisher: Optional[object] = None
@@ -53,7 +50,7 @@ def _get_ros_env() -> dict[str, str]:
     global _ros_env
     if _ros_env is not None:
         return _ros_env
-    logger.info("_get_ros_env: sourcing ROS env (may take a moment on first call)")
+    logger.info("_get_ros_env: sourcing ROS env")
     try:
         raw = subprocess.check_output(
             ["bash", "-lc", _source_prefix() + " && env -0"],
@@ -68,7 +65,8 @@ def _get_ros_env() -> dict[str, str]:
             if sep:
                 env[key.decode()] = val.decode("replace")
         _ros_env = env or os.environ.copy()
-    except Exception:
+    except Exception as ex:
+        logger.warning("_get_ros_env failed: %s, using os.environ", ex)
         _ros_env = os.environ.copy()
     return _ros_env
 
@@ -93,34 +91,23 @@ def _build_twist(direction: str, cfg: AppConfig) -> tuple[float, float]:
     raise ValueError("Unknown direction: %r" % direction)
 
 
-def _build_twist_cmd(
-    direction: str, use_sim: bool, cfg: AppConfig
-) -> list[str]:
-    topic = _cmd_topic(use_sim)
-    m = cfg.motion
-    L = "{linear: {x: %s, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: %s}}"
-    if direction == "stop":
-        twist = L % ("0.0", "0.0")
-    elif direction == "forward":
-        twist = L % (m.max_forward_speed, "0.0")
-    elif direction == "backward":
-        twist = L % (m.reverse_speed, "0.0")
-    elif direction == "left":
-        twist = L % (m.turn_forward_speed, m.turn_angular_speed)
-    elif direction == "right":
-        twist = L % (m.turn_forward_speed, -m.turn_angular_speed)
-    else:
-        raise ValueError("Unknown direction: %r" % direction)
-    return ["ros2", "topic", "pub", "--once", topic, "geometry_msgs/Twist", twist]
+def _build_twist_msg(direction: str, cfg: AppConfig) -> dict:
+    """Build a Twist dict for `ros2 topic pub` --once."""
+    lin, ang = _build_twist(direction, cfg)
+    return {
+        "linear": {"x": float(lin), "y": 0.0, "z": 0.0},
+        "angular": {"x": 0.0, "y": 0.0, "z": float(ang)},
+    }
 
 
-# ── Linux: rclpy publisher ────────────────────────────────────────────────────
+# ── rclpy publisher ──────────────────────────────────────────────────────────
 
 
 class _TeleopPublisherRclpy:
     """
-    Persistent rclpy publisher running in its own thread.
-    Uses a thread-safe queue so publish() can be called from any thread.
+    Persistent rclpy publisher in a background thread.
+    Pre-warms rclpy during construction so the publish loop is ready ASAP.
+    Falls back to subprocess if rclpy init fails.
     """
 
     def __init__(self, use_sim: bool, cfg: AppConfig) -> None:
@@ -132,50 +119,54 @@ class _TeleopPublisherRclpy:
         self._thread: Optional[threading.Thread] = None
         self._q: queue.Queue = queue.Queue()
         self._stop_event = threading.Event()
-        self._started = False
+        self._ready = threading.Event()
         self._start_error: Optional[str] = None
+        self._use_subprocess = False
+
+        self._thread = threading.Thread(target=self._run, daemon=True, name="rclpy_teleop")
+        self._thread.start()
 
     def _run(self) -> None:
-        import sys as _sys
-        logger.info("_TeleopPublisherRclpy._run: starting (topic=%s)", self._topic)
-        logger.info("  Python: %s  path[0]: %s", _sys.executable, _sys.path[0])
         try:
             import rclpy
+        except Exception as e:
+            self._start_error = "import rclpy failed: %s" % e
+            logger.error(self._start_error)
+            self._use_subprocess = True
+            self._ready.set()
+            return
+
+        try:
+            rclpy.init()
+        except Exception as e:
+            self._start_error = "rclpy.init() failed: %s" % e
+            logger.error(self._start_error)
+            self._use_subprocess = True
+            self._ready.set()
+            return
+
+        try:
             from geometry_msgs.msg import Twist
-        except Exception as e:
-            self._start_error = "import rclpy failed: %s" % e
-            logger.error(self._start_error)
-            return
-
-        logger.info("  rclpy imported, calling rclpy.init()...")
-        try:
-            rclpy.init()
-        except Exception as e:
-            self._start_error = "import rclpy failed: %s" % e
-            logger.error(self._start_error)
-            return
-
-        try:
-            rclpy.init()
             self._node = rclpy.node.Node("web_teleop_publisher")
             self._publisher = self._node.create_publisher(Twist, self._topic, 10)
-
-            lin, ang = _build_twist("stop", self._cfg)
+            # Publish stop Twist immediately so the topic is registered
             msg = Twist()
-            msg.linear.x = float(lin)
+            msg.linear.x = 0.0
             msg.linear.y = 0.0
             msg.linear.z = 0.0
             msg.angular.x = 0.0
             msg.angular.y = 0.0
-            msg.angular.z = float(ang)
+            msg.angular.z = 0.0
             self._publisher.publish(msg)
             logger.info("rclpy publisher ready on %s", self._topic)
         except Exception as e:
-            self._start_error = "rclpy init failed: %s" % e
+            self._start_error = "rclpy setup failed: %s" % e
             logger.error(self._start_error)
+            self._use_subprocess = True
+            self._ready.set()
             return
 
-        self._started = True
+        self._ready.set()
 
         while not self._stop_event.is_set():
             try:
@@ -191,45 +182,32 @@ class _TeleopPublisherRclpy:
                 msg.angular.y = 0.0
                 msg.angular.z = float(ang)
                 self._publisher.publish(msg)
-                logger.debug("published %s", direction)
+                logger.debug("rclpy published %s", direction)
             except queue.Empty:
                 rclpy.spin_once(self._node, timeout_sec=0.0)
             except Exception as e:
-                logger.error("publish error: %s", e)
+                logger.error("rclpy publish error: %s", e)
 
         self._node.destroy_node()
         rclpy.shutdown()
 
-    def start(self) -> None:
-        global _publisher
-        with _lock:
-            if _publisher is not None:
-                _publisher.stop()
-        logger.info("_TeleopPublisherRclpy.start: launching background thread")
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5.0)
-        global _publisher
-        with _lock:
-            _publisher = None
-
     @property
     def ready(self) -> bool:
-        return self._started
+        return self._ready.is_set()
 
     @property
     def error(self) -> Optional[str]:
         return self._start_error
 
+    @property
+    def use_subprocess(self) -> bool:
+        return self._use_subprocess
+
     def publish(self, direction: str) -> tuple[bool, str]:
-        if self._start_error:
-            return False, self._start_error
-        if not self._started:
-            return False, "Publisher not ready yet (rclpy thread may have failed)"
+        if self._use_subprocess:
+            return _publish_subprocess(direction, self._use_sim, self._cfg)
+        if not self._ready.is_set():
+            return False, "Publisher not ready yet"
         if direction not in TELEOP_DIRECTIONS:
             return False, "Unknown direction: %r" % direction
         try:
@@ -238,63 +216,46 @@ class _TeleopPublisherRclpy:
         except Exception as e:
             return False, str(e)
 
-
-# ── macOS / non-Linux: subprocess fallback ────────────────────────────────────
-
-
-class _TeleopPublisherSubprocess:
-    """
-    Subprocess-based publisher. Spawns `ros2 topic pub --once` on each call.
-    Used on non-Linux platforms where rclpy is unavailable.
-    """
-
-    def __init__(self, use_sim: bool, cfg: AppConfig) -> None:
-        self._use_sim = use_sim
-        self._cfg = cfg
-        self._topic = _cmd_topic(use_sim)
-
-    @property
-    def ready(self) -> bool:
-        return True
-
-    @property
-    def error(self) -> Optional[str]:
-        return None
-
-    def publish(self, direction: str) -> tuple[bool, str]:
-        if direction not in TELEOP_DIRECTIONS:
-            return False, "Unknown direction: %r" % direction
-        try:
-            cmd = _build_twist_cmd(direction, self._use_sim, self._cfg)
-            env = _get_ros_env()
-            proc = subprocess.run(
-                cmd,
-                env=env,
-                capture_output=True,
-                timeout=5,
-            )
-            if proc.returncode != 0:
-                err = proc.stderr.decode("utf-8", errors="ignore").strip()
-                return False, "ros2 topic pub failed: %s" % err
-            return True, "Published %s to %s" % (direction, self._topic)
-        except subprocess.TimeoutExpired:
-            return False, "ros2 topic pub timed out"
-        except Exception as e:
-            return False, "publish failed: %s" % e
-
-    def start(self) -> None:
-        pass
-
     def stop(self) -> None:
-        pass
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+
+
+# ── Subprocess fallback ──────────────────────────────────────────────────────
+
+
+def _publish_subprocess(
+    direction: str, use_sim: bool, cfg: AppConfig
+) -> tuple[bool, str]:
+    """Publish Twist via `ros2 topic pub --once` subprocess."""
+    topic = _cmd_topic(use_sim)
+    msg_dict = _build_twist_msg(direction, cfg)
+    import json
+    msg_str = json.dumps(msg_dict, separators=(",", ":"))
+    cmd = [
+        "ros2", "topic", "pub", "--once",
+        topic, "geometry_msgs/Twist", msg_str,
+    ]
+    env = _get_ros_env()
+    try:
+        proc = subprocess.run(
+            cmd,
+            env=env,
+            capture_output=True,
+            timeout=5,
+        )
+        if proc.returncode != 0:
+            err = proc.stderr.decode("utf-8", errors="ignore").strip()
+            return False, "ros2 topic pub failed: %s" % err
+        return True, "Published %s to %s" % (direction, topic)
+    except subprocess.TimeoutExpired:
+        return False, "ros2 topic pub timed out"
+    except Exception as e:
+        return False, "publish failed: %s" % e
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
-
-
-_TeleopPublisher: type = (
-    _TeleopPublisherRclpy if _IS_LINUX else _TeleopPublisherSubprocess
-)
 
 
 def ensure_publisher(use_sim: bool, cfg: AppConfig) -> object:
@@ -304,21 +265,16 @@ def ensure_publisher(use_sim: bool, cfg: AppConfig) -> object:
         if _publisher is not None and _publisher._use_sim == use_sim:
             return _publisher
         if _publisher is not None:
-            logger.info("ensure_publisher: stopping old publisher")
+            logger.info("stopping old publisher")
             _publisher.stop()
-        logger.info("ensure_publisher: creating new %s for use_sim=%s", _TeleopPublisher.__name__, use_sim)
-        _publisher = _TeleopPublisher(use_sim, cfg)
-        _publisher.start()
+        logger.info("creating new _TeleopPublisherRclpy for use_sim=%s", use_sim)
+        _publisher = _TeleopPublisherRclpy(use_sim, cfg)
         return _publisher
 
 
 def publish_twist(
     direction: str, use_sim: bool, cfg: AppConfig
 ) -> tuple[bool, str]:
-    """
-    Publish a geometry_msgs/Twist to the appropriate cmd_vel topic.
-    Thread-safe, returns (success, detail).
-    """
     pub = ensure_publisher(use_sim, cfg)
     return pub.publish(direction)
 
@@ -326,7 +282,6 @@ def publish_twist(
 async def publish_twist_async(
     direction: str, use_sim: bool, cfg: AppConfig
 ) -> tuple[bool, str]:
-    """Async wrapper — offloads publish to executor so it doesn't block."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None, lambda: publish_twist(direction, use_sim, cfg)
