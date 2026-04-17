@@ -17,6 +17,7 @@ from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
 from .teleop_publisher import (
     IS_LINUX,
+    ensure_publisher,
     publish_twist_async,
     TELEOP_DIRECTIONS,
 )
@@ -199,6 +200,18 @@ async def ws_teleop(websocket: WebSocket) -> None:
         "use_sim": use_sim,
         "topic": "/model/thymio/cmd_vel" if use_sim else "/cmd_vel",
     })
+
+    # Kick off publisher and wait for it to be ready before processing commands
+    pub = ensure_publisher(use_sim, cfg)
+    if not pub.ready:
+        logger.info("teleop publisher not ready, waiting...")
+        ok = pub.wait_ready(timeout=10.0)
+        if not ok:
+            await websocket.send_json({
+                "type": "error",
+                "detail": "Publisher failed to start: " + (pub.error or "unknown error"),
+            })
+            return
 
     try:
         while True:

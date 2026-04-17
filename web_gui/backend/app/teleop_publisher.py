@@ -196,6 +196,10 @@ class _TeleopPublisherRclpy:
     def ready(self) -> bool:
         return self._ready.is_set()
 
+    def wait_ready(self, timeout: float = 10.0) -> bool:
+        """Block until the rclpy thread is ready, or timeout expires."""
+        return self._ready.wait(timeout=timeout)
+
     @property
     def error(self) -> Optional[str]:
         return self._start_error
