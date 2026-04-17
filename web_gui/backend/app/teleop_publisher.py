@@ -136,10 +136,20 @@ class _TeleopPublisherRclpy:
         self._start_error: Optional[str] = None
 
     def _run(self) -> None:
+        import sys as _sys
         logger.info("_TeleopPublisherRclpy._run: starting (topic=%s)", self._topic)
+        logger.info("  Python: %s  path[0]: %s", _sys.executable, _sys.path[0])
         try:
             import rclpy
             from geometry_msgs.msg import Twist
+        except Exception as e:
+            self._start_error = "import rclpy failed: %s" % e
+            logger.error(self._start_error)
+            return
+
+        logger.info("  rclpy imported, calling rclpy.init()...")
+        try:
+            rclpy.init()
         except Exception as e:
             self._start_error = "import rclpy failed: %s" % e
             logger.error(self._start_error)
