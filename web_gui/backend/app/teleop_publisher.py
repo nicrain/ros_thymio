@@ -147,7 +147,8 @@ class _TeleopPublisherRclpy:
 
         try:
             from geometry_msgs.msg import Twist
-            self._node = rclpy.node.Node("web_teleop_publisher")
+            from rclpy.node import Node
+            self._node = Node("web_teleop_publisher")
             self._publisher = self._node.create_publisher(Twist, self._topic, 10)
             # Publish stop Twist immediately so the topic is registered
             msg = Twist()
