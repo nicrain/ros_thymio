@@ -784,23 +784,23 @@ body {
   font-size: 14px;
 }
 
-/* ── Camera + Teleop row (side-by-side) ─────────── */
-.camera-teleop-row {
+/* ── Camera row (with optional teleop beside it) ─── */
+.camera-row {
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 16px;
-  padding: 0 32px 0;
+  padding: 0 32px;
   background: var(--f-dark-bg);
   border-top: 1px solid #222;
 }
-.camera-teleop-row .camera-panel {
+.camera-panel-wrap {
   flex: 1 1 auto;
-  border: none;
+  min-width: 0;
 }
-.camera-teleop-row .teleop-panel {
+.teleop-panel-wrap {
   flex: 0 0 auto;
-  background: transparent;
-  border: none;
-  padding: 16px 0 16px;
+  align-self: center;
 }
 
 /* ── Teleop Panel ─────────────────────────────────── */
@@ -808,6 +808,13 @@ body {
   background: var(--f-white);
   border-top: 1px solid #eee;
   padding: 24px 32px 20px;
+}
+
+/* Teleop inside the dark camera row — invert to dark theme */
+.camera-row .teleop-panel {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  padding: 16px 20px 12px;
 }
 
 .teleop-header {
@@ -849,6 +856,17 @@ body {
 }
 .teleop-btn:hover  { background: #e8e8e8; }
 .teleop-btn.active { background: #333; color: #fff; }
+
+/* Dark-theme variant (inside camera row) */
+.camera-row .teleop-btn {
+  background: #2a2a2a;
+  border-color: #555;
+  color: #ddd;
+}
+.camera-row .teleop-btn:hover  { background: #3a3a3a; }
+.camera-row .teleop-btn.active { background: #fff; color: #111; }
+.camera-row .teleop-hint { color: #666; }
+.camera-row .teleop-header { margin-bottom: 10px; }
 
 .teleop-ack {
   text-align: center;

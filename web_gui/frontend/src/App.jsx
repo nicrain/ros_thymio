@@ -625,28 +625,32 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── SECTION 2b/3: Camera + Teleop side-by-side ───── */}
-      {outputMode === 'thymio_simu' && inputMode === 'teleop' ? (
-        <div className="camera-teleop-row">
-          <CameraPanel />
-          <TeleopPanel
-            teleopWsRef={teleopWsRef}
-            topic={teleopTopicRef.current}
-            connected={teleopConnected}
-          />
+      {/* ── SECTION 2b: Camera (+ Teleop beside it when in simu+teleop) ─ */}
+      {outputMode === 'thymio_simu' && (
+        <div className="camera-row">
+          <div className="camera-panel-wrap">
+            <CameraPanel />
+          </div>
+          {inputMode === 'teleop' && (
+            <div className="teleop-panel-wrap">
+              <TeleopPanel
+                teleopWsRef={teleopWsRef}
+                topic={teleopTopicRef.current}
+                connected={teleopConnected}
+              />
+            </div>
+          )}
         </div>
-      ) : outputMode === 'thymio_simu' ? (
-        <CameraPanel />
-      ) : null}
+      )}
 
-      {/* ── SECTION 3: Teleop-only (no camera) OR Waveforms ─ */}
+      {/* ── SECTION 3: Teleop (real robot) OR Waveforms ─ */}
       {inputMode === 'teleop' && outputMode !== 'thymio_simu' ? (
         <TeleopPanel
           teleopWsRef={teleopWsRef}
           topic={teleopTopicRef.current}
           connected={teleopConnected}
         />
-      ) : inputMode !== 'teleop' ? (
+      ) : (
         <div className="section-light">
           <span className="section-label">03 — Real-time Signals</span>
           <h2 className="section-heading">Signal Monitoring</h2>
