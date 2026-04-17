@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import sys
 import os
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,13 @@ from .mock_stream import MockSignalGenerator
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
 from .teleop_publisher import publish_twist_async, TELEOP_DIRECTIONS
+
+# Configure logging so teleop_publisher debug output is visible
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(name)-20s %(levelname)-5s %(message)s",
+    stream=sys.stderr,
+)
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
 
