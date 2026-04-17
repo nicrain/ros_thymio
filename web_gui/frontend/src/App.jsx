@@ -118,17 +118,6 @@ const DIR_LABELS = {
   stop:     '■',
 };
 
-const DIR_KEY_MAP = {
-  ArrowUp:    'forward',
-  KeyW:       'forward',
-  ArrowDown:  'backward',
-  KeyS:       'backward',
-  ArrowLeft:  'left',
-  KeyA:       'left',
-  ArrowRight: 'right',
-  KeyD:       'right',
-};
-
 function TeleopPanel({ teleopWsRef, topic, connected }) {
   const [activeDir, setActiveDir] = useState(null);
   const [ackMsg, setAckMsg] = useState('');
@@ -184,7 +173,7 @@ function TeleopPanel({ teleopWsRef, topic, connected }) {
         ))}
       </div>
       {ackMsg && <div className="teleop-ack">{ackMsg}</div>}
-      <div className="teleop-hint">Use WASD or arrow keys · Click/tap buttons above</div>
+      <div className="teleop-hint">Click / tap buttons above</div>
     </div>
   );
 }
@@ -316,7 +305,7 @@ export default function App() {
     return () => ws.close();
   }, [isControlMode]);
 
-  /* ── Teleop WebSocket + keyboard ─────────────────────── */
+  /* ── Teleop WebSocket ─────────────────────────────── */
   useEffect(() => {
     if (inputMode !== 'teleop') {
       if (teleopWsRef.current) teleopWsRef.current.close();
@@ -338,30 +327,8 @@ export default function App() {
       }
     };
 
-    function handleKeyDown(e) {
-      const dir = DIR_KEY_MAP[e.code];
-      if (!dir) return;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        e.preventDefault();
-      }
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ direction: dir }));
-      }
-    }
-
-    function handleKeyUp() {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ direction: 'stop' }));
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
     return () => {
       ws.close();
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
   }, [inputMode]);
 
