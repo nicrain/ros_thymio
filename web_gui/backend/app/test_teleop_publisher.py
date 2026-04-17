@@ -1,7 +1,7 @@
 from app.models import AppConfig
 from app.teleop_publisher import (
     TELEOP_DIRECTIONS,
-    _build_twist_cmd,
+    _build_twist,
     _cmd_topic,
 )
 
@@ -18,51 +18,51 @@ def test_teleop_directions():
     assert TELEOP_DIRECTIONS == {"forward", "backward", "left", "right", "stop"}
 
 
-def test_build_twist_cmd_stop():
+def test_build_twist_stop():
     cfg = AppConfig()
-    cmd = _build_twist_cmd("stop", use_sim=True, cfg=cfg)
-    assert cmd[0:4] == ["ros2", "topic", "pub", "--once"]
-    assert cmd[4] == "/model/thymio/cmd_vel"
-    assert "linear: {x: 0.0" in cmd[-1]
+    lin, ang = _build_twist("stop", cfg)
+    assert lin == 0.0
+    assert ang == 0.0
 
 
-def test_build_twist_cmd_forward():
+def test_build_twist_forward():
     cfg = AppConfig()
     cfg.motion.max_forward_speed = 0.5
-    cmd = _build_twist_cmd("forward", use_sim=False, cfg=cfg)
-    assert cmd[4] == "/cmd_vel"
-    assert "x: 0.5" in cmd[-1]
+    lin, ang = _build_twist("forward", cfg)
+    assert lin == 0.5
+    assert ang == 0.0
 
 
-def test_build_twist_cmd_backward():
+def test_build_twist_backward():
     cfg = AppConfig()
     cfg.motion.reverse_speed = -0.3
-    cmd = _build_twist_cmd("backward", use_sim=False, cfg=cfg)
-    assert "x: -0.3" in cmd[-1]
+    lin, ang = _build_twist("backward", cfg)
+    assert lin == -0.3
+    assert ang == 0.0
 
 
-def test_build_twist_cmd_left():
+def test_build_twist_left():
     cfg = AppConfig()
     cfg.motion.turn_forward_speed = 0.1
     cfg.motion.turn_angular_speed = 1.5
-    cmd = _build_twist_cmd("left", use_sim=True, cfg=cfg)
-    assert "x: 0.1" in cmd[-1]
-    assert "z: 1.5" in cmd[-1]
+    lin, ang = _build_twist("left", cfg)
+    assert lin == 0.1
+    assert ang == 1.5
 
 
-def test_build_twist_cmd_right():
+def test_build_twist_right():
     cfg = AppConfig()
     cfg.motion.turn_forward_speed = 0.2
     cfg.motion.turn_angular_speed = 2.0
-    cmd = _build_twist_cmd("right", use_sim=True, cfg=cfg)
-    assert "x: 0.2" in cmd[-1]
-    assert "z: -2.0" in cmd[-1]
+    lin, ang = _build_twist("right", cfg)
+    assert lin == 0.2
+    assert ang == -2.0
 
 
-def test_build_twist_cmd_unknown_raises():
+def test_build_twist_unknown_raises():
     cfg = AppConfig()
     try:
-        _build_twist_cmd("spin", use_sim=False, cfg=cfg)
+        _build_twist("spin", cfg)
     except ValueError as e:
         assert "Unknown direction" in str(e)
     else:
