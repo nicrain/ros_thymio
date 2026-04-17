@@ -1,9 +1,9 @@
 use_sim: true
 use_gui: false
-run_eeg: true
+run_eeg: false
 run_gaze: false
 run_rviz: false
-use_teleop: false
+use_teleop: true
 use_tobii_bridge: false
 use_enobio_bridge: false
 tobii_udp_port: 5005

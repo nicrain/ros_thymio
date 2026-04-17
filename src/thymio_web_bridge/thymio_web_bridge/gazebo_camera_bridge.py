@@ -74,7 +74,7 @@ async def ws_server(host: str = '127.0.0.1', port: int = 8011) -> None:
     clients: set = set()
 
     async def relay(websocket) -> None:
-        path = getattr(websocket.request, 'path', '')
+        path = getattr(websocket, 'path', '') or getattr(getattr(websocket, 'request', None), 'path', '')
         if path != '/ws/gazebo_frame':
             await websocket.send(json.dumps({'error': 'unknown path'}))
             await websocket.close()
