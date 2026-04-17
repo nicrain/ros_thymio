@@ -15,7 +15,19 @@ from .config_store import get_config_envelope, init_store, patch_config
 from .mock_stream import MockSignalGenerator
 from .models import CommandRequest, ConfigPatch
 from .ros_probe import probe_system
-from .teleop_publisher import publish_twist_async, TELEOP_DIRECTIONS
+from .teleop_publisher import (
+    _TeleopPublisher,
+    _IS_LINUX,
+    publish_twist_async,
+    TELEOP_DIRECTIONS,
+)
+
+logger = logging.getLogger("teleop_publisher")
+logger.info(
+    "teleop_publisher platform=%s publisher=%s",
+    sys.platform,
+    _TeleopPublisher.__name__,
+)
 
 # Configure logging so teleop_publisher debug output is visible
 logging.basicConfig(
@@ -181,6 +193,7 @@ async def ws_teleop(websocket: WebSocket) -> None:
     if await _reject_invalid_origin(websocket):
         return
     await websocket.accept()
+    logger.info("teleop WS connected from %s", websocket.client)
 
     cfg = get_config_envelope().config
     use_sim = cfg.launch.use_sim
@@ -195,6 +208,7 @@ async def ws_teleop(websocket: WebSocket) -> None:
     try:
         while True:
             msg = await websocket.receive_json()
+            logger.info("teleop WS received: %s", msg)
             direction = msg.get("direction", "")
             if direction not in TELEOP_DIRECTIONS:
                 await websocket.send_json({
