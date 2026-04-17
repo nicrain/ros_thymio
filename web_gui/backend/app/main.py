@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-import sys
 import os
 from pathlib import Path
 from typing import Any
@@ -20,16 +18,6 @@ from .teleop_publisher import (
     ensure_publisher,
     publish_twist_async,
     TELEOP_DIRECTIONS,
-)
-
-logger = logging.getLogger("teleop_publisher")
-logger.info("teleop_publisher platform=%s IS_LINUX=%s", sys.platform, IS_LINUX)
-
-# Configure logging so teleop_publisher debug output is visible
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s %(name)-20s %(levelname)-5s %(message)s",
-    stream=sys.stderr,
 )
 
 app = FastAPI(title="Thymio Web GUI Backend", version="0.1.0")
@@ -189,7 +177,6 @@ async def ws_teleop(websocket: WebSocket) -> None:
     if await _reject_invalid_origin(websocket):
         return
     await websocket.accept()
-    logger.info("teleop WS connected from %s", websocket.client)
 
     cfg = get_config_envelope().config
     use_sim = cfg.launch.use_sim
@@ -204,7 +191,6 @@ async def ws_teleop(websocket: WebSocket) -> None:
     # Kick off publisher and wait for it to be ready before processing commands
     pub = ensure_publisher(use_sim, cfg)
     if not pub.ready:
-        logger.info("teleop publisher not ready, waiting...")
         ok = pub.wait_ready(timeout=10.0)
         if not ok:
             await websocket.send_json({
@@ -216,7 +202,6 @@ async def ws_teleop(websocket: WebSocket) -> None:
     try:
         while True:
             msg = await websocket.receive_json()
-            logger.info("teleop WS received: %s", msg)
             direction = msg.get("direction", "")
             if direction not in TELEOP_DIRECTIONS:
                 await websocket.send_json({
