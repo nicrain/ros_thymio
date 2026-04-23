@@ -52,3 +52,23 @@ def test_pipeline_config_validation_rejects_bad_source_type():
 
     with pytest.raises(ValueError):
         _validate_pipeline_config(config)
+
+
+def test_experiment_config_has_eeg_device():
+    config_path = Path(__file__).resolve().parents[1] / "config" / "experiment_config.yaml"
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+
+    pipeline_config = config.get("pipeline_config", {})
+    assert "eeg_device" in pipeline_config
+    assert pipeline_config["eeg_device"] in {"enobio-20", "unicorn-8", "unicorn-4"}
+
+
+def test_eeg_launch_params_include_eeg_device():
+    config_path = Path(__file__).resolve().parents[1] / "config" / "eeg_control_node.params.yaml"
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        text = handle.read()
+
+    assert "eeg_device:" in text

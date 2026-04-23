@@ -92,6 +92,56 @@ Given the difficulty of physical robot testing, the project uses **test-driven d
 - `"file"` — offline `.easy`/`.info` Enobio recordings in `enobio_recodes/`
 - `"mock"` — simulated data for testing
 
+## Development Guidelines
+
+Based on [Andrej Karpathy's coding principles](https://github.com/forrestchang/andrej-karpathy-skills), adapted for ROS2/robotics projects.
+
+### 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+- State assumptions explicitly — especially about ROS2 topic timing, hardware handshake, or data format assumptions
+- If multiple interpretations exist, present them before implementing
+- If a simpler approach exists, say so
+- If something is unclear (e.g., EEG channel mapping, Gazebo world behavior), stop and ask
+
+### 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was requested
+- No abstractions for single-use code — the `POLICIES` dict and `build_adapter()` factory are the exceptions (justified by the strategy/adapter patterns)
+- No "flexibility" not in the YAML config
+- If you write 200 lines and it could be 50, rewrite it
+
+### 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+- Don't "improve" adjacent code, comments, or formatting
+- Don't refactor things that aren't broken
+- Match existing style
+- When your changes create unused imports/variables, remove them — but don't touch pre-existing dead code
+- The test: every changed line should trace directly to the user's request
+
+### 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+```
+
+- "Add a new EEG algorithm" → "Write tests with mock EEG data, verify output Twist, then integrate"
+- "Fix the TCP buffer drain" → "Confirm last complete packet is kept, no data corruption"
+- "Add a new launch file" → "Verify all topics remapped and parameters loaded correctly"
+
+---
+
+**These guidelines work if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation.
+
 ## Environment
 
 - ROS2 Kilted (or Humble/Iron) on Ubuntu 24.04 inside WSL2
