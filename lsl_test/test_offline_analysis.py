@@ -6,9 +6,6 @@ import pytest
 
 from lsl_test.edf_reader import EdfReader
 from lsl_test.eeg_processor import (
-    ALPHA_CHANNELS,
-    BETA_CHANNELS,
-    THETA_CHANNELS,
     BandPowers,
     band_power_to_metrics,
     compute_band_powers,
@@ -45,12 +42,11 @@ def test_band_powers_synthetic_alpha_signal():
 
 
 def test_alpha_regions_higher_alpha(edf_reader):
-    """Test that alpha-channel regions have higher alpha band power than beta regions.
+    """Test that occipital channels (O1, O2) have higher alpha/beta ratio
+    than central channels (C3, C4) which typically have stronger beta rhythm.
 
-    Note: Due to the non-standard scaling in this EDF file (values in billions),
-    we compare the RELATIVE alpha/beta ratio within each region rather than
-    absolute power values. Alpha channels should have a higher alpha/beta ratio
-    than beta channels.
+    Occipital alpha is a well-known EEG phenomenon — posterior channels
+    should show relatively more alpha power than central motor channels.
     """
     meta = edf_reader.metadata
 
@@ -61,13 +57,21 @@ def test_alpha_regions_higher_alpha(edf_reader):
     signals = edf_reader.read_signals(eeg_indices)
     result = compute_channel_band_powers(signals, labels, sample_rate=500)
 
-    if "alpha" in result and "beta" in result:
-        alpha_power = result["alpha"].alpha
-        beta_power = result["beta"].beta
-        # Alpha/beta ratio within alpha region should be higher than in beta region
-        # We use a lenient comparison since the EDF scaling is non-standard
-        ratio = alpha_power / (beta_power + 1e-10)
-        assert ratio > 0.01, f"Alpha region alpha/beta ratio {ratio} seems too low"
+    occipital_channels = [ch for ch in ("O1", "O2") if ch in result]
+    central_channels = [ch for ch in ("C3", "C4") if ch in result]
+
+    if occipital_channels and central_channels:
+        occ_alpha = sum(result[ch].alpha for ch in occipital_channels) / len(occipital_channels)
+        occ_beta = sum(result[ch].beta for ch in occipital_channels) / len(occipital_channels)
+        cen_alpha = sum(result[ch].alpha for ch in central_channels) / len(central_channels)
+        cen_beta = sum(result[ch].beta for ch in central_channels) / len(central_channels)
+
+        occ_ratio = occ_alpha / (occ_beta + 1e-10)
+        cen_ratio = cen_alpha / (cen_beta + 1e-10)
+        # Occipital alpha/beta ratio should be higher than central
+        assert occ_ratio > cen_ratio, (
+            f"Occipital alpha/beta ({occ_ratio:.6f}) should exceed central ({cen_ratio:.6f})"
+        )
 
 
 def test_theta_beta_ratio_range(edf_reader):

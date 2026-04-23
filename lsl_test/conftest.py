@@ -12,27 +12,40 @@ if str(_thymio_path) not in sys.path:
 
 @pytest.fixture
 def edf_path() -> Path:
+    pytest.importorskip("pyedflib", reason="pyedflib not installed")
     base = Path(__file__).parent
     # Try mock_data first, fall back to real enobio_recodes for development
     candidate = base / "mock_data" / "20260408111446_Patient01.edf"
     if candidate.exists():
         return candidate
-    return base.parent / "enobio_recodes" / "20260408111446_Patient01.edf"
+    fallback = base.parent / "enobio_recodes" / "20260408111446_Patient01.edf"
+    if fallback.exists():
+        return fallback
+    pytest.skip(
+        "No EDF file found — place one in lsl_test/mock_data/ or enobio_recodes/ to run this test"
+    )
 
 
 @pytest.fixture
 def easy_path() -> Path:
-    return Path(__file__).parent.parent / "enobio_recodes" / "20260408111446_Patient01.easy"
+    path = Path(__file__).parent.parent / "enobio_recodes" / "20260408111446_Patient01.easy"
+    if not path.exists():
+        pytest.skip("enobio_recodes/20260408111446_Patient01.easy not found")
+    return path
 
 
 @pytest.fixture
 def info_path() -> Path:
-    return Path(__file__).parent.parent / "enobio_recodes" / "20260408111446_Patient01.info"
+    path = Path(__file__).parent.parent / "enobio_recodes" / "20260408111446_Patient01.info"
+    if not path.exists():
+        pytest.skip("enobio_recodes/20260408111446_Patient01.info not found")
+    return path
 
 
 @pytest.fixture
 def edf_reader(edf_path: Path):
     """Create and automatically close an EdfReader."""
+    pytest.importorskip("pyedflib", reason="pyedflib not installed")
     from lsl_test.edf_reader import EdfReader
     reader = EdfReader(edf_path)
     yield reader

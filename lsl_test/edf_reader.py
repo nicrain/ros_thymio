@@ -101,9 +101,16 @@ class EdfReader:
         if not signal_indices:
             raise ValueError("signal_indices must not be empty")
 
-        result = np.empty((len(signal_indices), len(self._reader.readSignal(signal_indices[0]))), dtype=np.float64)
+        n_samples = len(self._reader.readSignal(signal_indices[0]))
+        result = np.empty((len(signal_indices), n_samples), dtype=np.float64)
         for i, idx in enumerate(signal_indices):
-            result[i] = self.read_signal(idx)
+            signal = self._reader.readSignal(idx)
+            if len(signal) != n_samples:
+                raise ValueError(
+                    f"Signal {idx} has {len(signal)} samples, expected {n_samples} "
+                    f"(mix of sample rates not supported by read_signals)"
+                )
+            result[i] = signal
         return result
 
     def iter_windows(
