@@ -191,9 +191,56 @@
 1. **StreamingBandPowerExtractor** — `eeg_processor.py` 目前只支持离线窗口，需添加适合实时流的滑动窗口 + 增量 PSD 模式。
 2. **chunk 批量推送** — `edf_to_lsl.py` 逐样本 `push_sample`，应改为 `push_chunk` 以提升效率。
 3. **RawLslAdapter** — 需构建 `pull_chunk → 累积窗口 → compute_band_powers → EegFrame` 的完整适配器，与现有 LslAdapter（薄壳）共存。
-4. **E2E 延迟基线** — EDF → LSL → RawLslAdapter → FocusPolicy → speed_intent，采集 p50/p95 延迟数据。
+4. **FileReader 接口化** — 抽取 `FileReader` 基类，`EdfFileReader` 作为第一个实现，方便未来扩展新文件格式。
+5. **E2E 延迟基线** — EDF → LSL → RawLslAdapter → FocusPolicy → speed_intent，采集 p50/p95 延迟数据。
 
-## 7.3 算法参数与可配置性（v2.1 新增）
+## 7.3 多设备与多格式可扩展性（v2.1 新增）
+
+### 已知设备矩阵
+
+| 设备 | 通道数 | 采样率 | LSL 支持 | 回放文件格式 | 状态 |
+|------|--------|--------|----------|-------------|------|
+| Enobio 20 | 20 (+3 accel) | 500 Hz | 是 | .edf / .easy+.info | 已有设备和数据 |
+| g.tec Unicorn Hybrid Black | 8 | 250 Hz | 是 | 未知（设备未到手） | 待定 |
+| g.tec BCI Core-4 Headband | 4 | 250 Hz | 是 | 未知（设备未到手） | 待定 |
+
+### 核心设计原则：设备无关的处理层
+
+处理层（`eeg_processor.py`）只依赖三个参数，不依赖设备类型：
+- `samples: ndarray` — 形状 (n_channels, n_samples)
+- `sample_rate: int` — 采样率
+- `channel_labels: list[str]` — 通道标签
+
+设备差异在以下两个薄层被抹平：
+1. **LSL 读取层** — LSL 协议本身设备无关，`StreamInfo` 自带 `sample_rate` 和 `channel_count`。不同设备的 LSL 流结构相同。
+2. **文件读取层** — `FileReader` 接口统一输出 `(signals, sample_rate, channel_labels)`，不同格式各自实现解析。
+
+### FileReader 接口设计
+
+```python
+class FileReader(Protocol):
+    @property
+    def sample_rate(self) -> int: ...
+    @property
+    def channel_labels(self) -> list[str]: ...
+    def read_signals(self, indices: Sequence[int]) -> np.ndarray: ...
+    def iter_windows(self, indices, *, window_sec, step_sec) -> Iterator[np.ndarray]: ...
+    def close(self) -> None: ...
+```
+
+当前实现: `EdfFileReader`（基于 pyedflib）。
+未来扩展: 新格式只需实现此接口，无需修改处理层或上层代码。
+
+### 未知因素的应对策略
+
+| 未知项 | 应对 |
+|--------|------|
+| g.tec 回放文件格式 | 预留 FileReader 接口，设备到手后添加实现 |
+| g.tec EDF 是否有非标字段 | EdfFileReader 基于 pyedflib，已能处理 Enobio 非标 EDF，大概率兼容 |
+| 是否有非 EDF 格式（如 XDF、CSV） | FileReader 接口可扩展，不影响已有代码 |
+| 不同设备的通道标签命名规范 | 通过 DeviceProfile 的 `channel_labels` 注入，处理层按索引访问 |
+
+## 7.4 算法参数与可配置性（v2.1 新增）
 
 当前算法参数状态: 尚未调优，使用学术标准默认值。所有参数必须可通过 YAML 配置覆盖。
 
@@ -431,13 +478,16 @@ thymio_control/thymio_control/
 - 已确认执行顺序与算法参数策略。
 
 ## Phase 1: 完成 lsl_test 实验区
-- 目标: 在不影响主链的前提下，完成 EDF/LSL 数据处理的完整链路。
+- 目标: 在不影响主链的前提下，完成设备无关的 EEG 数据处理完整链路。
+- 设计约束: 多设备（Enobio/Unicorn/BCI-4）、多格式（EDF + 未来扩展）可扩展，但代码保持简洁。详见 §7.3。
+- 分支: `feature/lsl-processing-pipeline`
 - 工作项:
-  1. 完善 `eeg_processor.py` — 添加 StreamingBandPowerExtractor（滑动窗口 + 增量 PSD），支持可配置 `window_sec` / `hop_sec`。
-  2. 优化 `edf_to_lsl.py` — `push_chunk` 批量推送，可配置 `chunk_size`。
-  3. 构建 RawLslAdapter — `pull_chunk → 累积窗口 → compute_band_powers → EegFrame`，与现有 LslAdapter 共存。
-  4. E2E 测试 + 延迟基线 — EDF → LSL → RawLslAdapter → FocusPolicy → speed_intent，采集 p50/p95 数据。
-- 产出: 可独立运行的完整链路 + 延迟基线数据。
+  1. 完善 `eeg_processor.py` — 添加 StreamingBandPowerExtractor（滑动窗口 + 增量 PSD），仅依赖 `sample_rate`，设备无关。
+  2. 抽取 `FileReader` 接口 — 从现有 `EdfReader` 抽取 Protocol，`EdfFileReader` 作为第一个实现。
+  3. 优化 `edf_to_lsl.py` — `push_chunk` 批量推送，从 `StreamInfo` 自动获取 `sample_rate`/`channel_count`（不硬编码设备参数）。
+  4. 构建 RawLslAdapter — `pull_chunk → 累积窗口 → compute_band_powers → EegFrame`，通过 LSL StreamInfo 自动适配任意设备的通道数和采样率。
+  5. E2E 测试 + 延迟基线 — EDF → LSL → RawLslAdapter → FocusPolicy → speed_intent，采集 p50/p95 数据。
+- 产出: 可独立运行的设备无关完整链路 + 延迟基线数据。
 
 ## Phase 2: 主架构边界落地
 - 目标: 拆分单文件巨石，落地六层架构。
@@ -517,10 +567,12 @@ thymio_control/thymio_control/
 ### v2.1（2026-04-24）
 1. 新增 §3.4 现状模块成熟度评估，基于代码审查的量化分析。
 2. 新增 §7.2 lsl_test 实验区详细现状（已完成模块/测试/待完成工作）。
-3. 新增 §7.3 算法参数与可配置性要求，明确所有 DSP 参数必须可通过 YAML 覆盖。
-4. 新增 §10.2 目标目录结构（重构后的文件布局）。
-5. 重写 §16 执行计划: 采用「Phase 1 lsl_test → Phase 2 架构重构 → Phase 3 合并」顺序。
-6. 确认向后兼容策略: 重构期间保留旧 `eeg_control_pipeline.py` 作为回滚路径。
+3. 新增 §7.3 多设备与多格式可扩展性设计（设备矩阵、FileReader 接口、未知因素应对策略）。
+4. 新增 §7.4 算法参数与可配置性要求，明确所有 DSP 参数必须可通过 YAML 覆盖。
+5. 新增 §10.2 目标目录结构（重构后的文件布局）。
+6. 重写 §16 执行计划: 采用「Phase 1 lsl_test → Phase 2 架构重构 → Phase 3 合并」顺序。
+7. 确认向后兼容策略: 重构期间保留旧 `eeg_control_pipeline.py` 作为回滚路径。
+8. Phase 1 增加 FileReader 接口抽取任务，为未来 g.tec 设备文件格式预留扩展点。
 
 ### v2.0（2026-04-24）
 1. 文档从“EEG LSL/EDF 专项重构”升级为“项目整体架构与工程化规范”。
