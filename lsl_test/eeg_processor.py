@@ -98,6 +98,7 @@ try:
         window_sec: float = 1.0,
         nperseg: Optional[int] = None,
         noverlap: Optional[int] = None,
+        bands: Optional[Dict[str, tuple]] = None,
     ) -> BandPowers:
         if nperseg is None:
             nperseg = min(int(window_sec * sample_rate), 256)
@@ -105,12 +106,13 @@ try:
             noverlap = nperseg // 2
 
         freqs, psd = _scipy_welch(signal, fs=sample_rate, nperseg=nperseg, noverlap=noverlap)
+        b = bands or BANDS
         return BandPowers(
-            delta=_band_power_from_psd(freqs, psd, BANDS["delta"]),
-            theta=_band_power_from_psd(freqs, psd, BANDS["theta"]),
-            alpha=_band_power_from_psd(freqs, psd, BANDS["alpha"]),
-            beta=_band_power_from_psd(freqs, psd, BANDS["beta"]),
-            gamma=_band_power_from_psd(freqs, psd, BANDS["gamma"]),
+            delta=_band_power_from_psd(freqs, psd, b["delta"]),
+            theta=_band_power_from_psd(freqs, psd, b["theta"]),
+            alpha=_band_power_from_psd(freqs, psd, b["alpha"]),
+            beta=_band_power_from_psd(freqs, psd, b["beta"]),
+            gamma=_band_power_from_psd(freqs, psd, b["gamma"]),
         )
 except ImportError:
     def compute_band_powers(
@@ -120,6 +122,7 @@ except ImportError:
         window_sec: float = 1.0,
         nperseg: Optional[int] = None,
         noverlap: Optional[int] = None,
+        bands: Optional[Dict[str, tuple]] = None,
     ) -> BandPowers:
         if nperseg is None:
             nperseg = min(int(window_sec * sample_rate), 256)
@@ -127,12 +130,13 @@ except ImportError:
             noverlap = nperseg // 2
 
         freqs, psd = _manual_welch_psd(signal, sample_rate, nperseg, noverlap)
+        b = bands or BANDS
         return BandPowers(
-            delta=_band_power_from_psd(freqs, psd, BANDS["delta"]),
-            theta=_band_power_from_psd(freqs, psd, BANDS["theta"]),
-            alpha=_band_power_from_psd(freqs, psd, BANDS["alpha"]),
-            beta=_band_power_from_psd(freqs, psd, BANDS["beta"]),
-            gamma=_band_power_from_psd(freqs, psd, BANDS["gamma"]),
+            delta=_band_power_from_psd(freqs, psd, b["delta"]),
+            theta=_band_power_from_psd(freqs, psd, b["theta"]),
+            alpha=_band_power_from_psd(freqs, psd, b["alpha"]),
+            beta=_band_power_from_psd(freqs, psd, b["beta"]),
+            gamma=_band_power_from_psd(freqs, psd, b["gamma"]),
         )
 
 
@@ -142,6 +146,7 @@ def compute_channel_band_powers(
     sample_rate: int,
     *,
     window_sec: float = 1.0,
+    bands: Optional[Dict[str, tuple]] = None,
 ) -> Dict[str, BandPowers]:
     """Compute all band powers for every channel.
 
@@ -154,7 +159,8 @@ def compute_channel_band_powers(
     for ch_idx, label in enumerate(channel_labels):
         if ch_idx >= len(signals):
             continue
-        bp = compute_band_powers(signals[ch_idx], sample_rate, window_sec=window_sec)
+        bp = compute_band_powers(signals[ch_idx], sample_rate, window_sec=window_sec,
+                                 bands=bands)
         result[label] = bp
 
     return result
@@ -171,3 +177,169 @@ def band_power_to_metrics(bp: BandPowers) -> Dict[str, float]:
         "theta_beta": bp.theta / (bp.beta + 1e-9),
         "alpha_beta": bp.alpha / (bp.beta + 1e-9),
     }
+
+
+# ---------------------------------------------------------------------------
+# Streaming (real-time) band power extraction
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DSPConfig:
+    """Configuration for DSP processing, shared by offline and streaming modes.
+
+    All parameters can be overridden via YAML ``dsp_config`` section.
+    """
+    window_sec: float = 1.0
+    hop_sec: float = 0.5
+    nperseg: Optional[int] = None      # None → auto: min(window_samples, 256)
+    noverlap: Optional[int] = None     # None → auto: nperseg // 2
+    bands: Optional[Dict[str, tuple]] = None   # None → use module-level BANDS
+
+
+class StreamingBandPowerExtractor:
+    """Sliding-window band power extractor for real-time EEG streams.
+
+    Device-agnostic: only depends on ``sample_rate`` and ``n_channels``.
+    Accumulates samples in a ring buffer and emits ``BandPowers`` for each
+    channel every time the hop criterion is met.
+
+    Usage::
+
+        ext = StreamingBandPowerExtractor(sample_rate=250, n_channels=8)
+        for chunk in lsl_inlet:
+            results = ext.feed_chunk(chunk)   # chunk: (n_channels, n_new)
+            for result in results:
+                print(result)  # Dict[int, BandPowers]
+
+    Parameters
+    ----------
+    sample_rate : int
+        Sampling rate in Hz (e.g. 250 for Unicorn, 500 for Enobio).
+    n_channels : int
+        Number of EEG channels.
+    config : DSPConfig, optional
+        DSP parameters. Uses defaults if not provided.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int,
+        n_channels: int,
+        config: Optional[DSPConfig] = None,
+    ) -> None:
+        if sample_rate <= 0:
+            raise ValueError(f"sample_rate must be positive, got {sample_rate}")
+        if n_channels <= 0:
+            raise ValueError(f"n_channels must be positive, got {n_channels}")
+
+        self._sample_rate = sample_rate
+        self._n_channels = n_channels
+        self._cfg = config or DSPConfig()
+        self._bands = self._cfg.bands or BANDS
+
+        self._window_samples = int(self._cfg.window_sec * sample_rate)
+        self._hop_samples = int(self._cfg.hop_sec * sample_rate)
+
+        if self._window_samples <= 0:
+            raise ValueError(
+                f"window_sec={self._cfg.window_sec} too small for sample_rate={sample_rate}"
+            )
+        if self._hop_samples <= 0:
+            raise ValueError(
+                f"hop_sec={self._cfg.hop_sec} too small for sample_rate={sample_rate}"
+            )
+
+        # Ring buffer: (n_channels, capacity)
+        # Capacity = window_samples to hold one full window.
+        self._buf = np.zeros((n_channels, self._window_samples), dtype=np.float64)
+        self._buf_len = 0       # How many valid samples are in the buffer
+        self._since_hop = 0     # Samples accumulated since last emission
+
+    @property
+    def sample_rate(self) -> int:
+        return self._sample_rate
+
+    @property
+    def n_channels(self) -> int:
+        return self._n_channels
+
+    @property
+    def window_samples(self) -> int:
+        return self._window_samples
+
+    @property
+    def hop_samples(self) -> int:
+        return self._hop_samples
+
+    def feed_chunk(self, chunk: np.ndarray) -> List[Dict[int, BandPowers]]:
+        """Feed a new chunk of samples and return any completed windows.
+
+        Parameters
+        ----------
+        chunk : np.ndarray
+            Shape ``(n_channels, n_new_samples)``. A 1-D array is treated as
+            a single-channel input.
+
+        Returns
+        -------
+        list of dict
+            Each dict maps channel index → BandPowers. Empty list if no
+            window was completed yet.
+        """
+        if chunk.ndim == 1:
+            chunk = chunk.reshape(1, -1)
+
+        n_ch, n_new = chunk.shape
+        if n_ch != self._n_channels:
+            raise ValueError(
+                f"chunk has {n_ch} channels, expected {self._n_channels}"
+            )
+
+        results: List[Dict[int, BandPowers]] = []
+        consumed = 0
+
+        while consumed < n_new:
+            # How many samples can we write into the buffer?
+            space = self._window_samples - self._buf_len
+            take = min(space, n_new - consumed)
+
+            self._buf[:, self._buf_len:self._buf_len + take] = chunk[:, consumed:consumed + take]
+            self._buf_len += take
+            self._since_hop += take
+            consumed += take
+
+            # Emit if buffer is full AND hop criterion met
+            if self._buf_len >= self._window_samples and self._since_hop >= self._hop_samples:
+                results.append(self._compute_current_window())
+                self._advance_buffer()
+
+        return results
+
+    def _compute_current_window(self) -> Dict[int, BandPowers]:
+        """Compute band powers for the current full window."""
+        result: Dict[int, BandPowers] = {}
+        for ch in range(self._n_channels):
+            signal = self._buf[ch, :self._window_samples]
+            result[ch] = compute_band_powers(
+                signal,
+                self._sample_rate,
+                window_sec=self._cfg.window_sec,
+                nperseg=self._cfg.nperseg,
+                noverlap=self._cfg.noverlap,
+                bands=self._bands,
+            )
+        return result
+
+    def _advance_buffer(self) -> None:
+        """Slide the buffer forward by hop_samples."""
+        keep = self._window_samples - self._hop_samples
+        if keep > 0:
+            self._buf[:, :keep] = self._buf[:, self._hop_samples:self._window_samples]
+        self._buf_len = keep
+        self._since_hop = 0
+
+    def reset(self) -> None:
+        """Clear the internal buffer."""
+        self._buf[:] = 0.0
+        self._buf_len = 0
+        self._since_hop = 0
