@@ -155,9 +155,6 @@ ros2 launch thymio_control eeg_thymio.launch.py use_sim:=true use_gui:=true
 - `--input mock`：本地模拟数据
 - `--input tcp_client`：连接外部 TCP EEG 服务
 - `--input lsl`：LSL 实时输入
-- `--input file`：离线 Enobio 录制文件回放
-
-其中 `file` 模式也可以直接由配置文件中的 `pipeline_config.source_type: file` 触发。
 
 Gaze 控制推荐入口：
 
@@ -227,54 +224,6 @@ python3 thymio_control/scripts/eeg_control_node.py --ros-args --params-file thym
 - Enobio bridge: `thymio_control/tools/bridges/wsl_enobio_bridge.py`
 - USB attach helper: `thymio_control/tools/system/prepare_usb.sh`
 - `thymio_control/scripts/thymio_ros.py` 已保留为 deprecated 兼容入口（仅提示迁移命令）。
-
-### 离线文件回放模式（Enobio 录制文件）
-
-如果你想用 `enobio_recodes/` 下的录制文件回放 EEG 数据，可以在配置文件里把 `pipeline_config.source_type` 设为 `file`。默认会读取仓库内置示例录音，也可以在 YAML 中显式指定 `info_path` 和 `easy_path`。
-
-推荐优先使用配置文件控制录制文件来源，因为这样可以同时固定 `selected_channels` 和 `algorithm`：
-
-```yaml
-pipeline_config:
-  source_type: file
-  info_path: enobio_recodes/20260330123659_Patient01.info
-  easy_path: enobio_recodes/20260330123659_Patient01.easy
-  selected_channels: [0, 1, 2]
-  algorithm: theta_beta_ratio
-```
-
-示例用法：
-
-```bash
-# 直接使用配置文件启用离线文件模式（推荐）
-python3 -m thymio_control.eeg_control_pipeline --config thymio_control/config/experiment_config.yaml
-
-# 也可以显式指定 file 输入模式，入口会优先走离线文件回放路径
-python3 -m thymio_control.eeg_control_pipeline --config thymio_control/config/experiment_config.yaml --input file
-```
-
-如果你希望在自定义配置中指定录音文件路径，建议保持 `experiment_config.yaml` 只放这一类 pipeline 字段：
-
-```yaml
-pipeline_config:
-  source_type: file
-  info_path: enobio_recodes/20260330123659_Patient01.info
-  easy_path: enobio_recodes/20260330123659_Patient01.easy
-  selected_channels: [0, 1, 2]
-  algorithm: theta_beta_ratio
-```
-
-该模式会按采样率回放每一行样本，并走统一的特征提取与 `Twist` 映射逻辑。
-
-如果你打算手动调试，可直接用仓库内置示例：
-
-```bash
-python3 -m thymio_control.eeg_control_pipeline \
-  --config thymio_control/config/experiment_config.yaml \
-  --input file
-```
-
-只要 `pipeline_config.source_type` 是 `file`，这个入口会自动读取 `info_path` / `easy_path`，并把相对路径按配置文件所在目录解析。
 
 ## 仓库结构
 

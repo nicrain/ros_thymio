@@ -143,7 +143,7 @@ Windows 设备 SDK
 | --- | --- | --- | --- |
 | `ros2 launch thymio_control eeg_thymio.launch.py` | EEG 快捷 launch | `config/eeg_control_node.params.yaml` | `input`、`policy`、`tcp_control_mode`、`tcp_host`、`tcp_port`、`cmd_topic` |
 | `ros2 launch thymio_control experiment_core.launch.py` | 总编排 launch | `config/launch_args.yaml` + `config/eeg_control_node.params.yaml` | `use_sim`、`use_gui`、`run_eeg`、`run_gaze`、`use_teleop`、`use_tobii_bridge`、`use_enobio_bridge` |
-| `python3 -m thymio_control.eeg_control_pipeline` | 统一 pipeline CLI | `config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm`、`info_path`、`easy_path` |
+| `python3 -m thymio_control.eeg_control_pipeline` | 统一 pipeline CLI | `config/experiment_config.yaml` | `pipeline_config.source_type`、`selected_channels`、`algorithm` |
 
 ### 4.3 `scripts/gaze_control_node.py`（UDP JSON -> Twist）
 
@@ -243,16 +243,10 @@ Windows 设备 SDK
 - 把单个 feature 值按离散阈值映射为 Twist，与 movement 模式约定一致。
 - 由 EEG 节点在 `tcp_control_mode=feature` 时调用，也供离线管线使用。
 
-5. 离线文件管线（`OfflineFilePipeline`）
-- 依赖 `EnobioFileReader` 读取 `.info` / `.easy` 录制文件。
-- 通过 `PIPELINE_ALGORITHMS`（当前支持 `theta_beta_ratio`）计算逐帧 feature。
-- `iter_twists()` 迭代输出 Twist，供集成测试或离线回放使用。
-- CLI 以 `--input file` 或 `pipeline_config.source_type: file` 触发此路径。
-
-6. 独立 CLI 主程序
+5. 独立 CLI 主程序
 - 可直接运行 pipeline 发 UDP（不依赖 ROS 节点）。
 - 支持 `--config`，并实现"命令行参数优先于 YAML"。
-- `--input` 支持 `mock`、`tcp_client`、`lsl`、`file`（离线模式）。
+- `--input` 支持 `mock`、`tcp_client`、`lsl`。
 
 ---
 

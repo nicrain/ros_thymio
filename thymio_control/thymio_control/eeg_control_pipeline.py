@@ -18,14 +18,12 @@ import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence
 
 try:
     import yaml
 except ImportError:
     yaml = None
-
-from thymio_control.enobio_file_reader import EnobioFileReader
 
 # ---------------------------------------------------------------------------
 # Multi-device EEG configuration registry
@@ -591,60 +589,6 @@ def compute_pipeline_feature(raw_data: Any, selected_channels: Sequence[int], al
     return float(algorithm(filtered_data))
 
 
-class OfflineFilePipeline:
-    """End-to-end pipeline for offline Enobio recordings.
-
-    It connects the file reader, dynamic feature pipeline, and feature-to-Twist
-    mapping in a single deterministic runner used by integration tests.
-    """
-
-    def __init__(
-        self,
-        *,
-        info_path: str,
-        easy_path: str,
-        pipeline_config: Dict[str, Any],
-        max_forward_speed: float = 0.2,
-        turn_angular_speed: float = 1.2,
-        steer_deadzone: float = 0.1,
-    ) -> None:
-        source_type = str(pipeline_config.get("source_type", "")).strip()
-        if source_type != "file":
-            raise ValueError("OfflineFilePipeline requires pipeline_config.source_type == 'file'")
-
-        self.reader = EnobioFileReader(info_path, easy_path)
-        self.selected_channels = list(pipeline_config.get("selected_channels", []))
-        self.algorithm_name = str(pipeline_config.get("algorithm", "")).strip()
-        self.max_forward_speed = float(max_forward_speed)
-        self.turn_angular_speed = float(turn_angular_speed)
-        self.steer_deadzone = float(steer_deadzone)
-
-    def iter_twists(self, *, limit: Optional[int] = None) -> Iterator[Twist]:
-        metadata = self.reader.read_info()
-        samples = self.reader.read_easy_samples()
-
-        produced = 0
-        for sample in samples:
-            if len(sample) < metadata.channels:
-                raise ValueError(
-                    f"Enobio sample has {len(sample)} values but metadata declares {metadata.channels} channels"
-                )
-
-            channel_major_data = [[sample[index]] for index in range(metadata.channels)]
-            feature = compute_pipeline_feature(channel_major_data, self.selected_channels, self.algorithm_name)
-            twist = feature_to_twist(
-                feature,
-                max_forward_speed=self.max_forward_speed,
-                turn_angular_speed=self.turn_angular_speed,
-                steer_deadzone=self.steer_deadzone,
-            )
-            yield twist
-
-            produced += 1
-            if limit is not None and produced >= limit:
-                break
-
-
 class Policy:
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         raise NotImplementedError
@@ -739,29 +683,9 @@ def extract_pipeline_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "source_type": str(pipeline_cfg.get("source_type", "tcp_client")).strip() or "tcp_client",
         "selected_channels": selected_channels,
         "algorithm": str(pipeline_cfg.get("algorithm", "theta_beta_ratio")).strip() or "theta_beta_ratio",
-        "info_path": str(pipeline_cfg.get("info_path", "")).strip(),
-        "easy_path": str(pipeline_cfg.get("easy_path", "")).strip(),
         "realtime": bool(pipeline_cfg.get("realtime", False)),
         "eeg_device": str(pipeline_cfg.get("eeg_device", "enobio-20")).strip() or "enobio-20",
     }
-
-
-def resolve_pipeline_file_paths(pipeline_config: Dict[str, Any], config_path: str = "") -> tuple[str, str]:
-    repo_root = Path(__file__).resolve().parents[2]
-    config_dir = Path(config_path).resolve().parent if config_path else repo_root
-    default_info = repo_root / "enobio_recodes" / "20260330123659_Patient01.info"
-    default_easy = repo_root / "enobio_recodes" / "20260330123659_Patient01.easy"
-
-    def _resolve(raw_path: str, default_path: Path) -> str:
-        candidate = Path(raw_path).expanduser() if raw_path else default_path
-        if not candidate.is_absolute():
-            candidate = config_dir / candidate
-        return str(candidate.resolve())
-
-    return _resolve(str(pipeline_config.get("info_path", "")), default_info), _resolve(
-        str(pipeline_config.get("easy_path", "")),
-        default_easy,
-    )
 
 
 def flatten_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -850,30 +774,10 @@ def build_adapter(args: Any) -> BaseAdapter:
     raise RuntimeError(f"Unsupported input mode: {args.input}")
 
 
-def run_offline_file_pipeline(args: argparse.Namespace, pipeline_config: Dict[str, Any], config_path: str = "") -> int:
-    info_path, easy_path = resolve_pipeline_file_paths(pipeline_config, config_path)
-    pipeline = OfflineFilePipeline(
-        info_path=info_path,
-        easy_path=easy_path,
-        pipeline_config=pipeline_config,
-        max_forward_speed=float(getattr(args, "max_forward_speed", 0.2)),
-        turn_angular_speed=float(getattr(args, "turn_angular_speed", 1.2)),
-        steer_deadzone=float(getattr(args, "steer_deadzone", 0.1)),
-    )
-
-    for twist in pipeline.iter_twists():
-        if getattr(args, "verbose", False):
-            print(f"[offline-file] linear_x={twist.linear.x:.3f} angular_z={twist.angular.z:.3f}")
-        else:
-            print(json.dumps({"linear_x": twist.linear.x, "angular_z": twist.angular.z}))
-
-    return 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
-    parser.add_argument("--input", choices=["mock", "tcp_client", "tcp_file", "lsl", "file"], default="mock")
+    parser.add_argument("--input", choices=["mock", "tcp_client", "tcp_file", "lsl"], default="mock")
     parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
     parser.add_argument(
         "--eeg-device",
@@ -913,16 +817,15 @@ def main() -> int:
             return 1
 
     pipeline_config = extract_pipeline_config(cfg)
+    if pipeline_config.get("source_type") == "file":
+        logging.getLogger(__name__).error(
+            "Enobio easy/info file replay is no longer supported. Use tcp_file, tcp_client, lsl, or mock instead."
+        )
+        return 1
+
     # Propagate eeg_device from config to args (command-line already took priority via apply_config_to_args)
     if not getattr(args, "eeg_device", None) or args.eeg_device == "enobio-20":
         args.eeg_device = pipeline_config.get("eeg_device", "enobio-20")
-
-    if args.input == "file" or pipeline_config.get("source_type") == "file":
-        try:
-            return run_offline_file_pipeline(args, pipeline_config, args.config)
-        except Exception as e:
-            logging.getLogger(__name__).error(f"cannot run offline file pipeline: {e}")
-            return 1
 
     adapter = build_adapter(args)
     policy = POLICIES[args.policy]()
