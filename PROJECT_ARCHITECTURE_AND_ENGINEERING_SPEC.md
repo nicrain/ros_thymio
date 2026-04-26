@@ -233,6 +233,8 @@ class FileReader(Protocol):
 
 ### 未知因素的应对策略
 
+1. **LSL 通道标签降级**: 多数设备（Enobio, g.tec）的 LSL 默认配置不一定在 `desc` 树中注入自定义的 `channel_labels` 标签。当无法从 LSL 描述中解析出明确标签时，系统会默认降级使用 `["ch0", "ch1", ...]`。此降级被视作正常行为，但在未来的设备接入时可考虑配合 `info.channel()` 进行适配补充。
+
 | 未知项 | 应对 |
 |--------|------|
 | g.tec 回放文件格式 | 预留 FileReader 接口，设备到手后添加实现 |
@@ -259,9 +261,31 @@ class FileReader(Protocol):
 设计约束:
 1. 所有参数保持当前默认值，但必须可通过 `experiment_config.yaml` 的 `dsp_config` 段覆盖。
 2. 实时与离线模式共用同一套参数，运行时可方便地修改 `window_sec` / `hop_sec`。
-3. 频段定义支持用户自定义扩展或覆盖标准频段。
+3. 频段定义支持用户自定义扩展或部分覆盖标准频段（缺失频段自动回退到默认值）。
 
-## 7.4 合并门禁
+## 7.5 流处理边角情况与性能优化路线（v2.1 新增）
+
+在实时流处理（StreamingBandPowerExtractor）中，需遵循以下设计规约：
+
+1. **尾部不完整窗口（Flush & Drop）**
+   - 场景：当 EDF 文件回放结束（EOF），或物理 LSL 流突然断开连接时，缓冲区内可能残留不足一个 `window_sec` 的数据。
+   - 策略：直接丢弃（Drop）。原因：Welch 算法需要达到最小 `nperseg`（默认 256 样本）才能保证频域分辨率。强制计算尾部碎片数据会引入失真，污染控制指令。
+   - 实现：处理器需提供显式的 `flush()` 或 `reset()` 接口。
+
+2. **滑动窗口缓冲区的零拷贝优化（Zero-copy Ring Buffer）**
+   - 现状（Phase 1）：目前允许使用 Numpy 数组切片（Slicing & Copy）来实现窗口数据的滑动推进，对于现有通道数（<20通道）性能开销极低，作为骨架是可靠的。
+   - 演进（Phase 5）：未来如需支持高密度脑电（如 64/128 通道）或更高采样率，若 Profile 发现数据搬移带来可观的 CPU 占用，需将底层修改为维护首尾指针的纯零拷贝环形队列（Circular Buffer）。
+
+3. **中间处理结果丢弃与遥测策略 (Intermediate Results Dropping)**
+   - 场景：在加速文件回放（如 10x 速度）或 `pull_chunk` 批量获取多份数据时，由于一次输入积累了足够长的数据，Extractor 可能会在单次 `feed_chunk` 内触发多次 hop 并生成多个中间窗口结果。
+   - 策略：当前适配器 (`RawLslAdapter`) 为保证控制链路实时性，默认策略是仅提取最新结果，丢弃中间窗口。这是合理的。
+   - 演进（Phase 2）：为确保系统行为可观测，应通过内部遥测 (Telemetry) 对丢弃的有效窗口数量进行统计，监测实际的丢弃率。
+
+4. **EDF 桥接时间精度与防抖（Timer Jitter Compensation）**
+   - 现状（Phase 1）：在 `EdfToLslBridge` 中使用 `time.sleep` 控制模拟数据流推送速度，但在 Windows 系统下存在约 15.6 ms 的默认 Timer Jitter，对高频推送（例如 32 ms 间隔）可能造成实际发送频率的波动。
+   - 演进：若系统对测试回放的高精度定时有严苛要求，可改用 `time.sleep` + 忙等（busy-wait）或自旋锁机制补偿 Jitter。
+
+## 7.6 合并门禁
 1. 功能门禁
 - raw sample 输入与 feature frame 输出契约冻结。
 
@@ -274,12 +298,12 @@ class FileReader(Protocol):
 4. 运维门禁
 - 支持配置化开关、灰度启用、快速回滚。
 
-## 7.5 运行路径建议
+## 7.7 运行路径建议
 1. live_device + lsl + raw sample -> 重计算路径（DSP）。
 2. replay_file + edf_replay 或 file->lsl + raw sample -> 重计算路径（DSP）。
 3. tcp/udp 若直接携带上层特征或控制值 -> 轻处理路径。
 
-## 7.6 线程与定时建议
+## 7.8 线程与定时建议
 1. 采集线程与执行器解耦。
 2. 控制定时与遥测定时解耦。
 3. 队列满时丢旧保新，保证控制链路新鲜度。
@@ -477,7 +501,7 @@ thymio_control/thymio_control/
 - 建立现状矩阵（§3.4）、模块成熟度评估。
 - 已确认执行顺序与算法参数策略。
 
-## Phase 1: 完成 lsl_test 实验区
+## Phase 1: 完成 lsl_test 实验区 ✅ 已完成
 - 目标: 在不影响主链的前提下，完成设备无关的 EEG 数据处理完整链路。
 - 设计约束: 多设备（Enobio/Unicorn/BCI-4）、多格式（EDF + 未来扩展）可扩展，但代码保持简洁。详见 §7.3。
 - 分支: `feature/lsl-processing-pipeline`
@@ -490,12 +514,14 @@ thymio_control/thymio_control/
 - 产出: 可独立运行的设备无关完整链路 + 延迟基线数据。
 
 ## Phase 2: 主架构边界落地
-- 目标: 拆分单文件巨石，落地六层架构。
+- 目标: 拆分单文件巨石，落地 §10.2 定义的六层架构，并将 Phase 1 的实验成果并入核心。
 - 工作项:
-  1. 数据契约落地 — `contracts.py`（RawSampleFrame / FeatureFrame / ControlFrame）。
-  2. 拆分 `eeg_control_pipeline.py` 为 §10.2 目标目录结构。
-  3. 重写 `eeg_control_node._tick()` — 消除 3 个控制分支的重复代码。
-  4. 保留旧 `eeg_control_pipeline.py` 作为回滚路径（feature flag 控制）。
+  1. 基础架构组建 — 创建 `adapters/`, `processors/`, `policies/` 目录结构。
+  2. 数据契约与配置落地 — 抽取 `contracts.py`（本次暂缓重构到三大契约，保留 `EegFrame` 以平滑过渡）与 `device_profiles.py`。
+  3. Processor 迁移 — 将 Phase 1 的 `StreamingBandPowerExtractor` 迁移至 `processors/band_power.py`，派生特征迁移至 `processors/enrich.py`。
+  4. Policy 迁移 — 提取基础接口及具体策略实现到 `policies/`。
+  5. Adapter 迁移 — 将各种数据输入源适配器（含 Phase 1 的 `RawLslAdapter`）分类存入 `adapters/`。
+  6. Pipeline 组装 — 新建 `pipeline.py` 统合各模块对外提供一致接口。保留旧版 `eeg_control_pipeline.py` 作为回滚路径（feature flag 控制）。
 - 产出: 分层目录 + 现有 34 个测试 + lsl_test 21 个测试全绿。
 
 ## Phase 3: lsl_test 合并到主链
@@ -569,10 +595,11 @@ thymio_control/thymio_control/
 2. 新增 §7.2 lsl_test 实验区详细现状（已完成模块/测试/待完成工作）。
 3. 新增 §7.3 多设备与多格式可扩展性设计（设备矩阵、FileReader 接口、未知因素应对策略）。
 4. 新增 §7.4 算法参数与可配置性要求，明确所有 DSP 参数必须可通过 YAML 覆盖。
-5. 新增 §10.2 目标目录结构（重构后的文件布局）。
-6. 重写 §16 执行计划: 采用「Phase 1 lsl_test → Phase 2 架构重构 → Phase 3 合并」顺序。
-7. 确认向后兼容策略: 重构期间保留旧 `eeg_control_pipeline.py` 作为回滚路径。
-8. Phase 1 增加 FileReader 接口抽取任务，为未来 g.tec 设备文件格式预留扩展点。
+5. 新增 §7.5 流处理边角情况与性能优化路线，明确尾部窗口丢弃策略和缓冲区零拷贝优化方向。
+6. 新增 §10.2 目标目录结构（重构后的文件布局）。
+7. 重写 §16 执行计划: 采用「Phase 1 lsl_test → Phase 2 架构重构 → Phase 3 合并」顺序。
+8. 确认向后兼容策略: 重构期间保留旧 `eeg_control_pipeline.py` 作为回滚路径。
+9. Phase 1 增加 FileReader 接口抽取任务，为未来 g.tec 设备文件格式预留扩展点。
 
 ### v2.0（2026-04-24）
 1. 文档从“EEG LSL/EDF 专项重构”升级为“项目整体架构与工程化规范”。

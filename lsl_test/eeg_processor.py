@@ -88,26 +88,8 @@ def _band_power_from_psd(freqs: np.ndarray, psd: np.ndarray, band: tuple[float, 
     return float(np.sum(psd[mask]) * df)
 
 
-# Timeout-protected scipy import — Python 3.14 + scipy can hang during
-# import on some platforms.  Fall back to manual FFT if it takes too long.
-_scipy_welch = None
-
-def _try_import_scipy():
-    global _scipy_welch
-    try:
-        from scipy.signal import welch as _w
-        _scipy_welch = _w
-    except ImportError:
-        pass
-
-import threading as _threading
-_t = _threading.Thread(target=_try_import_scipy, daemon=True)
-_t.start()
-_t.join(timeout=3.0)  # Wait at most 3 seconds
-if _t.is_alive():
-    _scipy_welch = None  # Timed out, use fallback
-
-if _scipy_welch is not None:
+try:
+    from scipy.signal import welch as _scipy_welch
 
     def compute_band_powers(
         signal: np.ndarray,
@@ -132,7 +114,7 @@ if _scipy_welch is not None:
             beta=_band_power_from_psd(freqs, psd, b["beta"]),
             gamma=_band_power_from_psd(freqs, psd, b["gamma"]),
         )
-else:
+except ImportError:
     def compute_band_powers(
         signal: np.ndarray,
         sample_rate: int,

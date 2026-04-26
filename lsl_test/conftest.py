@@ -1,5 +1,7 @@
 """pytest fixtures for lsl_test."""
+import gc
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,14 @@ import pytest
 _thymio_path = Path(__file__).parent.parent / "thymio_control"
 if str(_thymio_path) not in sys.path:
     sys.path.insert(0, str(_thymio_path))
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_lsl_outlets():
+    """Force GC after each LSL test to release stale StreamOutlets."""
+    yield
+    gc.collect()
+    time.sleep(0.3)  # Let LSL daemon detect closed outlets
 
 
 @pytest.fixture

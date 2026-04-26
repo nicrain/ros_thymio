@@ -22,11 +22,13 @@ class EdfToLslBridge:
         realtime: bool = True,
         playback_speed: float = 1.0,
         chunk_size: int = 16,
+        source_id: str = "edf_eeg_01",
     ) -> None:
         self._eeg_path = Path(edf_path)
         self._realtime = realtime
         self._playback_speed = float(playback_speed)
         self._chunk_size = chunk_size
+        self._source_id = source_id
         self._stop_event = threading.Event()
         self._eeg_thread: Optional[threading.Thread] = None
         self._accel_thread: Optional[threading.Thread] = None
@@ -55,7 +57,7 @@ class EdfToLslBridge:
             channel_count=len(eeg_labels),
             nominal_srate=self._eeg_srate,
             channel_format="float32",
-            source_id="edf_eeg_01",
+            source_id=self._source_id,
         )
         eeg_desc = eeg_info.desc()
         eeg_desc.append_child_value("channel_labels", ",".join(eeg_labels))
@@ -130,6 +132,9 @@ class EdfToLslBridge:
             self._eeg_thread.join(timeout=2.0)
         if self._accel_thread:
             self._accel_thread.join(timeout=2.0)
+        # Explicitly release outlets so LSL daemon detects stream closure
+        self._eeg_outlet = None
+        self._accel_outlet = None
 
     @property
     def eeg_outlet(self):
