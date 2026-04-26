@@ -88,8 +88,26 @@ def _band_power_from_psd(freqs: np.ndarray, psd: np.ndarray, band: tuple[float, 
     return float(np.sum(psd[mask]) * df)
 
 
-try:
-    from scipy.signal import welch as _scipy_welch
+# Timeout-protected scipy import — Python 3.14 + scipy can hang during
+# import on some platforms.  Fall back to manual FFT if it takes too long.
+_scipy_welch = None
+
+def _try_import_scipy():
+    global _scipy_welch
+    try:
+        from scipy.signal import welch as _w
+        _scipy_welch = _w
+    except ImportError:
+        pass
+
+import threading as _threading
+_t = _threading.Thread(target=_try_import_scipy, daemon=True)
+_t.start()
+_t.join(timeout=3.0)  # Wait at most 3 seconds
+if _t.is_alive():
+    _scipy_welch = None  # Timed out, use fallback
+
+if _scipy_welch is not None:
 
     def compute_band_powers(
         signal: np.ndarray,
@@ -106,7 +124,7 @@ try:
             noverlap = nperseg // 2
 
         freqs, psd = _scipy_welch(signal, fs=sample_rate, nperseg=nperseg, noverlap=noverlap)
-        b = bands or BANDS
+        b = {**BANDS, **(bands or {})}
         return BandPowers(
             delta=_band_power_from_psd(freqs, psd, b["delta"]),
             theta=_band_power_from_psd(freqs, psd, b["theta"]),
@@ -114,7 +132,7 @@ try:
             beta=_band_power_from_psd(freqs, psd, b["beta"]),
             gamma=_band_power_from_psd(freqs, psd, b["gamma"]),
         )
-except ImportError:
+else:
     def compute_band_powers(
         signal: np.ndarray,
         sample_rate: int,
@@ -130,7 +148,7 @@ except ImportError:
             noverlap = nperseg // 2
 
         freqs, psd = _manual_welch_psd(signal, sample_rate, nperseg, noverlap)
-        b = bands or BANDS
+        b = {**BANDS, **(bands or {})}
         return BandPowers(
             delta=_band_power_from_psd(freqs, psd, b["delta"]),
             theta=_band_power_from_psd(freqs, psd, b["theta"]),
@@ -331,12 +349,28 @@ class StreamingBandPowerExtractor:
         return result
 
     def _advance_buffer(self) -> None:
-        """Slide the buffer forward by hop_samples."""
+        """Slide the buffer forward by hop_samples.
+
+        Note: Currently uses numpy slicing (copy). For Phase 1 with <20
+        channels this is negligible. If profiling reveals significant CPU
+        cost at higher channel counts (64/128), replace with a zero-copy
+        circular buffer using head/tail pointers.
+        """
         keep = self._window_samples - self._hop_samples
         if keep > 0:
             self._buf[:, :keep] = self._buf[:, self._hop_samples:self._window_samples]
         self._buf_len = keep
         self._since_hop = 0
+
+    def flush(self) -> List[Dict[int, BandPowers]]:
+        """Flush the extractor, dropping any incomplete window.
+
+        Welch's method requires at least ``nperseg`` samples for meaningful
+        spectral estimation. Incomplete tail data is discarded to avoid
+        polluting control signals with low-resolution PSD.
+        """
+        self.reset()
+        return []
 
     def reset(self) -> None:
         """Clear the internal buffer."""

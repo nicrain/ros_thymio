@@ -5,9 +5,40 @@ Falls back to a minimal manual parser if pyedflib is unavailable.
 """
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, List, Optional, Sequence
+from typing import Iterator, List, Optional, Protocol, Sequence
 
 import numpy as np
+
+
+# ---------------------------------------------------------------------------
+# Device-agnostic file reader interface
+# ---------------------------------------------------------------------------
+
+class FileReader(Protocol):
+    """Protocol for device-agnostic file readers.
+
+    Any file format reader (EDF, XDF, CSV, ...) that implements this
+    interface can be used interchangeably by the processing layer.
+    The processing layer only depends on (samples, sample_rate, channel_labels).
+    """
+
+    @property
+    def sample_rate(self) -> int: ...
+
+    @property
+    def channel_labels(self) -> List[str]: ...
+
+    def read_signals(self, signal_indices: Sequence[int]) -> np.ndarray: ...
+
+    def iter_windows(
+        self,
+        signal_indices: Sequence[int],
+        *,
+        window_sec: float,
+        step_sec: float,
+    ) -> Iterator[np.ndarray]: ...
+
+    def close(self) -> None: ...
 
 
 try:
@@ -89,6 +120,24 @@ class EdfReader:
             n_data_records=self._n_data_records,
             record_duration_sec=self._record_duration,
         )
+
+    # -- FileReader protocol properties --
+
+    @property
+    def sample_rate(self) -> int:
+        """Sample rate of the first signal.
+
+        Assumes all EEG channels share the same rate (true for Enobio,
+        Unicorn, BCI Core-4). Accelerometer channels may differ.
+        """
+        if not self._signals:
+            return 0
+        return self._signals[0].sample_rate
+
+    @property
+    def channel_labels(self) -> List[str]:
+        """Labels for all signals in the file."""
+        return [s.label for s in self._signals]
 
     def read_signal(self, signal_index: int) -> np.ndarray:
         if signal_index >= len(self._signals):

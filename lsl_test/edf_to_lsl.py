@@ -1,8 +1,8 @@
 """EDF → LSL StreamOutlet bridge.
 
 Reads an EDF file and streams its channels as LSL outlets:
-- "EEG" stream: 20 channels @ 500 Hz
-- "ACCEL" stream: 3 channels @ 100 Hz
+- "EEG" stream: channel count and sample rate read from the EDF metadata.
+- "ACCEL" stream: accelerometer channels (X, Y, Z) if present.
 """
 import threading
 import time
@@ -21,10 +21,12 @@ class EdfToLslBridge:
         *,
         realtime: bool = True,
         playback_speed: float = 1.0,
+        chunk_size: int = 16,
     ) -> None:
         self._eeg_path = Path(edf_path)
         self._realtime = realtime
         self._playback_speed = float(playback_speed)
+        self._chunk_size = chunk_size
         self._stop_event = threading.Event()
         self._eeg_thread: Optional[threading.Thread] = None
         self._accel_thread: Optional[threading.Thread] = None
@@ -43,11 +45,15 @@ class EdfToLslBridge:
         eeg_labels = [s.label for s in eeg_channels]
         accel_labels = [s.label for s in accel_channels]
 
+        # Derive sample rates from EDF metadata — no hardcoding
+        self._eeg_srate = float(eeg_channels[0].sample_rate) if eeg_channels else 500.0
+        self._accel_srate = float(accel_channels[0].sample_rate) if accel_channels else 100.0
+
         eeg_info = StreamInfo(
             name="Patient01_EEG",
             type="EEG",
             channel_count=len(eeg_labels),
-            nominal_srate=500.0,
+            nominal_srate=self._eeg_srate,
             channel_format="float32",
             source_id="edf_eeg_01",
         )
@@ -61,7 +67,7 @@ class EdfToLslBridge:
                 name="Patient01_ACCEL",
                 type="ACCEL",
                 channel_count=len(accel_labels),
-                nominal_srate=100.0,
+                nominal_srate=self._accel_srate,
                 channel_format="float32",
                 source_id="edf_accel_01",
             )
@@ -73,7 +79,7 @@ class EdfToLslBridge:
 
         eeg_data = reader.read_signals([i for i, s in enumerate(meta.signals) if s.label not in ("X", "Y", "Z")])
 
-        # read_signals returns (n_channels, n_samples), always transpose for LSL push_sample
+        # read_signals returns (n_channels, n_samples), transpose for LSL (samples, channels)
         self._eeg_data = eeg_data.T
         self._accel_data = None
 
@@ -94,27 +100,29 @@ class EdfToLslBridge:
         if self._eeg_outlet is None or self._eeg_data is None:
             return
         data = self._eeg_data
-        interval = 1.0 / 500.0 / self._playback_speed
+        chunk_interval = self._chunk_size / self._eeg_srate / self._playback_speed
 
-        for sample in data:
+        for i in range(0, len(data), self._chunk_size):
             if self._stop_event.is_set():
                 break
-            self._eeg_outlet.push_sample(sample.astype(np.float32))
+            chunk = data[i:i + self._chunk_size]
+            self._eeg_outlet.push_chunk(chunk.astype(np.float32).tolist())
             if self._realtime:
-                time.sleep(interval)
+                time.sleep(chunk_interval)
 
     def _stream_accel(self) -> None:
         if self._accel_outlet is None or self._accel_data is None:
             return
         data = self._accel_data
-        interval = 1.0 / 100.0 / self._playback_speed
+        chunk_interval = self._chunk_size / self._accel_srate / self._playback_speed
 
-        for sample in data:
+        for i in range(0, len(data), self._chunk_size):
             if self._stop_event.is_set():
                 break
-            self._accel_outlet.push_sample(sample.astype(np.float32))
+            chunk = data[i:i + self._chunk_size]
+            self._accel_outlet.push_chunk(chunk.astype(np.float32).tolist())
             if self._realtime:
-                time.sleep(interval)
+                time.sleep(chunk_interval)
 
     def stop(self) -> None:
         self._stop_event.set()
