@@ -113,9 +113,10 @@ def test_offline_policy_intents(edf_path: Path):
 
     reader = EdfReader(edf_path)
     ch0 = reader.read_signal(0)[:500]
+    source_unit = reader.metadata.signals[0].physical_dim
 
     bp = compute_band_powers(ch0, sample_rate=500)
-    metrics = band_power_to_metrics(bp)
+    metrics = band_power_to_metrics(bp, source_unit=source_unit)
     enriched = enrich_features(metrics)
 
     policy = FocusPolicy()

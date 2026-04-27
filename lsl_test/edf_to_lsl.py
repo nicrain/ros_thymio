@@ -61,6 +61,8 @@ class EdfToLslBridge:
         )
         eeg_desc = eeg_info.desc()
         eeg_desc.append_child_value("channel_labels", ",".join(eeg_labels))
+        # Embed source unit so downstream adapters can auto-detect it
+        eeg_desc.append_child_value("source_unit", eeg_channels[0].physical_dim)
 
         # Only create ACCEL stream if we have accelerometer channels
         self._accel_outlet = None

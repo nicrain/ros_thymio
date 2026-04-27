@@ -166,14 +166,23 @@ def compute_channel_band_powers(
     return result
 
 
-def band_power_to_metrics(bp: BandPowers) -> Dict[str, float]:
-    """Convert BandPowers to metrics dict compatible with EegFrame."""
+def band_power_to_metrics(bp: BandPowers, source_unit: str = "µV") -> Dict[str, float]:
+    """Convert BandPowers to metrics dict compatible with EegFrame.
+
+    Parameters
+    ----------
+    bp : BandPowers
+        Band powers in source_unit² (e.g. nV²).
+    source_unit : str
+        Amplitude unit of the source signal. Band powers are converted
+        to µV² for output (e.g. "nV" → values are scaled by 1e-6).
+    """
     return {
-        "alpha": bp.alpha,
-        "beta": bp.beta,
-        "theta": bp.theta,
-        "delta": bp.delta,
-        "gamma": bp.gamma,
+        "alpha": convert_power_to_uv2(bp.alpha, source_unit),
+        "beta": convert_power_to_uv2(bp.beta, source_unit),
+        "theta": convert_power_to_uv2(bp.theta, source_unit),
+        "delta": convert_power_to_uv2(bp.delta, source_unit),
+        "gamma": convert_power_to_uv2(bp.gamma, source_unit),
         "theta_beta": bp.theta / (bp.beta + 1e-9),
         "alpha_beta": bp.alpha / (bp.beta + 1e-9),
     }
@@ -182,6 +191,36 @@ def band_power_to_metrics(bp: BandPowers) -> Dict[str, float]:
 # ---------------------------------------------------------------------------
 # Streaming (real-time) band power extraction
 # ---------------------------------------------------------------------------
+
+# Unit conversion table: factor to convert FROM the key unit TO µV
+_UNIT_TO_UV: Dict[str, float] = {
+    "nV": 0.001,
+    "µV": 1.0,
+    "uV": 1.0,
+    "mV": 1000.0,
+    "V": 1_000_000.0,
+}
+
+
+def convert_power_to_uv2(value: float, source_unit: str) -> float:
+    """Convert band power from source_unit² to µV².
+
+    Parameters
+    ----------
+    value : float
+        Band power in source_unit² (e.g. nV²).
+    source_unit : str
+        The amplitude unit of the source signal (e.g. "nV", "µV").
+    """
+    factor = _UNIT_TO_UV.get(source_unit)
+    if factor is None:
+        raise ValueError(
+            f"Unknown source_unit '{source_unit}'. "
+            f"Supported: {list(_UNIT_TO_UV.keys())}"
+        )
+    # Power scales as amplitude², so factor² converts source_unit² → µV²
+    return value * (factor ** 2)
+
 
 @dataclass
 class DSPConfig:
@@ -194,6 +233,7 @@ class DSPConfig:
     nperseg: Optional[int] = None      # None → auto: min(window_samples, 256)
     noverlap: Optional[int] = None     # None → auto: nperseg // 2
     bands: Optional[Dict[str, tuple]] = None   # None → use module-level BANDS
+    source_unit: str = "µV"            # amplitude unit of the source signal
 
 
 class StreamingBandPowerExtractor:

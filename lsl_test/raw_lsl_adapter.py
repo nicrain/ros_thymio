@@ -57,9 +57,16 @@ class RawLslAdapter:
         # Read channel labels from stream desc if available
         self._channel_labels = self._read_channel_labels(info)
 
+        # Read source unit from stream desc, fall back to config
+        desc = info.desc()
+        stream_unit = desc.child_value("source_unit")
+
         # Create streaming extractor
         from lsl_test.eeg_processor import DSPConfig, StreamingBandPowerExtractor
         self._cfg = config or DSPConfig()
+        # Prefer stream-level unit if available, otherwise use config
+        if stream_unit:
+            self._cfg.source_unit = stream_unit
         self._extractor = StreamingBandPowerExtractor(
             sample_rate=self._sample_rate,
             n_channels=self._n_channels,
@@ -126,7 +133,7 @@ class RawLslAdapter:
             beta=avg_beta,
             gamma=avg_gamma,
         )
-        metrics = band_power_to_metrics(avg_bp)
+        metrics = band_power_to_metrics(avg_bp, source_unit=self._cfg.source_unit)
 
         # Build EegFrame-compatible dict
         # Import here to avoid circular dependency with main pipeline
