@@ -62,11 +62,13 @@ class RawLslAdapter:
         stream_unit = desc.child_value("source_unit")
 
         # Create streaming extractor
+        from dataclasses import replace
         from lsl_test.eeg_processor import DSPConfig, StreamingBandPowerExtractor
         self._cfg = config or DSPConfig()
-        # Prefer stream-level unit if available, otherwise use config
+        # Prefer stream-level unit if available, otherwise use config.
+        # Use replace() to avoid mutating the caller's config object.
         if stream_unit:
-            self._cfg.source_unit = stream_unit
+            self._cfg = replace(self._cfg, source_unit=stream_unit)
         self._extractor = StreamingBandPowerExtractor(
             sample_rate=self._sample_rate,
             n_channels=self._n_channels,
