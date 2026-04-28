@@ -70,7 +70,7 @@
   - **验证策略 (Validation)**: 编写 `test_lsl_adapter.py`。启动一个本地的 mock `pylsl.StreamOutlet` 发送假数据，验证 Adapter 的 `pull_sample` 能否稳定读取数据流（可通过 pytest 设置超时机制）。如果环境未安装 `pylsl`，测试应明确跳过并说明原因，而不是假通过。
 
 ### 📌 需求 1: Enobio 离线文件回放模式 (Offline File Playback)
-**背景**：利用 `enobio_recodes/` 下成对出现的 `.info` (配置) 和 `.easy` (时间序列数据) 模拟实时流。
+**背景**：利用 `records/` 下成对出现的 `.info` (配置) 和 `.easy` (时间序列数据) 模拟实时流。
 
 - [x] **Task 1.1: 创建 EnobioFileReader 动态解析模块**
   - **位置**: 新建 `thymio_control/thymio_control/enobio_file_reader.py`。

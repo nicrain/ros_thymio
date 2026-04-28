@@ -90,7 +90,7 @@ async def list_tcp_files() -> dict[str, Any]:
     """Return list of available TCP data files for playback."""
     from pathlib import Path
     repo_root = Path(__file__).resolve().parents[3]
-    tcp_dir = repo_root / "enobio_recodes"
+    tcp_dir = repo_root / "records"
     if not tcp_dir.exists():
         return {"files": []}
     txt_files = sorted([

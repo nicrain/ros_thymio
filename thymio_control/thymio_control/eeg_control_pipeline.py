@@ -453,7 +453,7 @@ class TcpFileAdapter(BaseAdapter):
         if not path.is_absolute():
             repo_root = Path(__file__).resolve().parents[2]
             candidate_repo = (repo_root / path).resolve()
-            candidate_recode = (repo_root / "enobio_recodes" / path).resolve()
+            candidate_recode = (repo_root / "records" / path).resolve()
             if candidate_repo.exists():
                 path = candidate_repo
             elif candidate_recode.exists():

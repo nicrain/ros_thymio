@@ -89,7 +89,7 @@ Given the difficulty of physical robot testing, the project uses **test-driven d
 `experiment_config.yaml` controls the data source via `pipeline_config.source_type`:
 - `"tcp_client"` — live Enobio EEG via TCP
 - `"lsl"` — Lab Streaming Layer
-- `"file"` — offline `.easy`/`.info` Enobio recordings in `enobio_recodes/`
+- `"file"` — offline `.easy`/`.info` Enobio recordings in `records/`
 - `"mock"` — simulated data for testing
 
 ## Development Guidelines

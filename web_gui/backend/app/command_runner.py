@@ -56,7 +56,7 @@ def _resolve_tcp_file_path(file_path: str) -> str:
     if candidate_repo.exists():
         return str(candidate_repo)
 
-    candidate_recode = (repo_root / "enobio_recodes" / p).resolve()
+    candidate_recode = (repo_root / "records" / p).resolve()
     if candidate_recode.exists():
         return str(candidate_recode)
 

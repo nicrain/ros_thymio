@@ -61,7 +61,7 @@
 |---|---------|------|
 | A | `shlex.quote` 恢复（路径含空格保护）— `command_runner.py` | `4ed7aa8` |
 | B | `TcpFileAdapter` 文件不存在时抛出 `FileNotFoundError`（含候选路径） | `6af5d11` |
-| C | `TcpFileAdapter._load_file()` 相对路径解析增强（repo 根目录 / enobio_recodes 两路径） | `da3b7dc` |
+| C | `TcpFileAdapter._load_file()` 相对路径解析增强（repo 根目录 / records 两路径） | `da3b7dc` |
 | D | `launch` 新增 `file_path` launch 参数传递 | `da3b7dc` |
 | E | WebSocket `Origin` 头校验（两个 WebSocket 端点均加） | `da3b7dc` |
 | F | ROS 环境变量缓存（`_load_ros_env()` 避免重复 sourcing） | `da3b7dc` |

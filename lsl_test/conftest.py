@@ -24,31 +24,31 @@ def _cleanup_lsl_outlets():
 def edf_path() -> Path:
     pytest.importorskip("pyedflib", reason="pyedflib not installed")
     base = Path(__file__).parent
-    # Try mock_data first, fall back to real enobio_recodes for development
+    # Try mock_data first, fall back to real records for development
     candidate = base / "mock_data" / "20260408111446_Patient01.edf"
     if candidate.exists():
         return candidate
-    fallback = base.parent / "enobio_recodes" / "20260408111446_Patient01.edf"
+    fallback = base.parent / "records" / "20260408111446_Patient01.edf"
     if fallback.exists():
         return fallback
     pytest.skip(
-        "No EDF file found — place one in lsl_test/mock_data/ or enobio_recodes/ to run this test"
+        "No EDF file found — place one in lsl_test/mock_data/ or records/ to run this test"
     )
 
 
 @pytest.fixture
 def easy_path() -> Path:
-    path = Path(__file__).parent.parent / "enobio_recodes" / "20260408111446_Patient01.easy"
+    path = Path(__file__).parent.parent / "records" / "20260408111446_Patient01.easy"
     if not path.exists():
-        pytest.skip("enobio_recodes/20260408111446_Patient01.easy not found")
+        pytest.skip("records/20260408111446_Patient01.easy not found")
     return path
 
 
 @pytest.fixture
 def info_path() -> Path:
-    path = Path(__file__).parent.parent / "enobio_recodes" / "20260408111446_Patient01.info"
+    path = Path(__file__).parent.parent / "records" / "20260408111446_Patient01.info"
     if not path.exists():
-        pytest.skip("enobio_recodes/20260408111446_Patient01.info not found")
+        pytest.skip("records/20260408111446_Patient01.info not found")
     return path
 
 
