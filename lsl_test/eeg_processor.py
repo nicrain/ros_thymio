@@ -166,32 +166,6 @@ def compute_channel_band_powers(
     return result
 
 
-def band_power_to_metrics(bp: BandPowers, source_unit: str = "µV") -> Dict[str, float]:
-    """Convert BandPowers to metrics dict compatible with EegFrame.
-
-    Parameters
-    ----------
-    bp : BandPowers
-        Band powers in source_unit² (e.g. nV²).
-    source_unit : str
-        Amplitude unit of the source signal. Band powers are converted
-        to µV² for output (e.g. "nV" → values are scaled by 1e-6).
-    """
-    return {
-        "alpha": convert_power_to_uv2(bp.alpha, source_unit),
-        "beta": convert_power_to_uv2(bp.beta, source_unit),
-        "theta": convert_power_to_uv2(bp.theta, source_unit),
-        "delta": convert_power_to_uv2(bp.delta, source_unit),
-        "gamma": convert_power_to_uv2(bp.gamma, source_unit),
-        "theta_beta": bp.theta / (bp.beta + 1e-9),
-        "alpha_beta": bp.alpha / (bp.beta + 1e-9),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Streaming (real-time) band power extraction
-# ---------------------------------------------------------------------------
-
 # Unit conversion table: factor to convert FROM the key unit TO µV
 _UNIT_TO_UV: Dict[str, float] = {
     "nV": 0.001,
@@ -220,6 +194,33 @@ def convert_power_to_uv2(value: float, source_unit: str) -> float:
         )
     # Power scales as amplitude², so factor² converts source_unit² → µV²
     return value * (factor ** 2)
+
+
+def band_power_to_metrics(bp: BandPowers, source_unit: str = "µV") -> Dict[str, float]:
+    """Convert BandPowers to metrics dict compatible with EegFrame.
+
+    Parameters
+    ----------
+    bp : BandPowers
+        Band powers in source_unit² (e.g. nV²).
+    source_unit : str
+        Amplitude unit of the source signal. Band powers are converted
+        to µV² for output (e.g. "nV" → values are scaled by 1e-6).
+    """
+    return {
+        "alpha": convert_power_to_uv2(bp.alpha, source_unit),
+        "beta": convert_power_to_uv2(bp.beta, source_unit),
+        "theta": convert_power_to_uv2(bp.theta, source_unit),
+        "delta": convert_power_to_uv2(bp.delta, source_unit),
+        "gamma": convert_power_to_uv2(bp.gamma, source_unit),
+        "theta_beta": bp.theta / (bp.beta + 1e-9),
+        "alpha_beta": bp.alpha / (bp.beta + 1e-9),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Streaming (real-time) band power extraction
+# ---------------------------------------------------------------------------
 
 
 @dataclass
