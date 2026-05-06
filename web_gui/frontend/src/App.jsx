@@ -275,7 +275,34 @@ export default function App() {
   /* ── Load config ────────────────────────────────────── */
   useEffect(() => {
     api.get('/api/config')
-      .then((r) => { setConfig(r.data.config); setFeedback('Config loaded.'); })
+      .then((r) => {
+        const cfg = r.data.config;
+        setConfig(cfg);
+        setFeedback('Config loaded.');
+        // Sync backend config → local UI state
+        if (cfg.eeg) {
+          const inp = cfg.eeg.input || 'mock';
+          if (inp === 'mock') {
+            setInputMode('mock');
+          } else if (inp === 'tcp_file') {
+            setInputMode('eeg');
+            setEegProtocol('tcp_file');
+          } else if (inp === 'lsl') {
+            setInputMode('eeg');
+            setEegProtocol('lsl');
+          } else if (inp === 'file') {
+            setInputMode('eeg');
+            setEegProtocol('file');
+          } else {
+            setInputMode('eeg');
+            setEegProtocol('tcp');
+          }
+          if (cfg.eeg.file_path) setFilePath(cfg.eeg.file_path);
+        }
+        if (cfg.launch) {
+          setOutputMode(cfg.launch.use_sim ? 'thymio_simu' : 'thymio');
+        }
+      })
       .catch((err) => setFeedback(`Init failed: ${err.message}`));
   }, []);
 
@@ -526,7 +553,7 @@ export default function App() {
 
             <div className="btn-row">
               <button className="btn btn-cta"     onClick={startSystem}>Start</button>
-              <button className="btn btn-ghost"   onClick={() => runAction('/api/system/stop',  true)}>Stop</button>
+              <button className="btn btn-ghost"   onClick={() => runAction('/api/system/stop',  false)}>Stop</button>
             </div>
           </div>
 
