@@ -179,9 +179,17 @@ class RawLslAdapter(BaseAdapter):
     # Lifecycle helpers
     # ------------------------------------------------------------------
 
-    def flush(self) -> None:
-        """Flush the internal DSP buffer (discard incomplete window)."""
-        self._extractor.flush()
+    def flush(self) -> list:
+        """Flush the internal DSP buffer (discard incomplete window).
+
+        Returns
+        -------
+        list
+            Always returns ``[]`` (no completed windows) — matches the
+            contract of ``StreamingBandPowerExtractor.flush()`` and
+            maintains backward compatibility with the Phase 1 API.
+        """
+        return self._extractor.flush()
 
     def reset(self) -> None:
         """Reset the internal DSP buffer."""

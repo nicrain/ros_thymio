@@ -755,6 +755,12 @@ def build_adapter(args: Any) -> BaseAdapter:
         if not file_path:
             raise RuntimeError("tcp_file mode requires --file-path")
         return TcpFileAdapter(file_path)
+    if args.input == "file":
+        file_path = getattr(args, "file_path", "")
+        if not file_path:
+            raise RuntimeError("file mode requires --file-path")
+        from thymio_control.adapters.edf_file import EdfFileAdapter
+        return EdfFileAdapter(file_path)
     if args.input == "lsl":
         channel_map = parse_channel_map(args.lsl_channel_map)
         if not channel_map:
@@ -777,7 +783,7 @@ def build_adapter(args: Any) -> BaseAdapter:
 def main() -> int:
     parser = argparse.ArgumentParser(description="EEG -> UDP intent pipeline for Thymio")
     parser.add_argument("--config", default="", help="Path to YAML config file")
-    parser.add_argument("--input", choices=["mock", "tcp_client", "tcp_file", "lsl"], default="mock")
+    parser.add_argument("--input", choices=["mock", "tcp_client", "tcp_file", "lsl", "file"], default="mock")
     parser.add_argument("--policy", choices=sorted(POLICIES.keys()), default="focus")
     parser.add_argument(
         "--eeg-device",

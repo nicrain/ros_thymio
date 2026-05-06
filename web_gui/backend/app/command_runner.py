@@ -31,7 +31,7 @@ def _build_launch_command(cfg: AppConfig) -> list[str]:
         f"use_tobii_bridge:={_bool_str(launch.use_tobii_bridge)}",
         f"use_enobio_bridge:={_bool_str(launch.use_enobio_bridge)}",
     ]
-    if cfg.eeg.input == "tcp_file" and cfg.eeg.file_path:
+    if cfg.eeg.input in ("tcp_file", "file") and cfg.eeg.file_path:
         resolved_file = _resolve_tcp_file_path(cfg.eeg.file_path)
         cmd.append(f"file_path:={resolved_file}")
     return cmd

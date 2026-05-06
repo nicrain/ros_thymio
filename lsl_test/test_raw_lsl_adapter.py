@@ -95,7 +95,7 @@ def test_raw_lsl_adapter_basic(lsl_eeg_stream):
 
         assert "alpha" in metrics
         assert "beta" in metrics
-        assert "theta_beta" in metrics
+        assert "theta" in metrics
         # Alpha should dominate for 10 Hz signal
         assert metrics["alpha"] > metrics["theta"]
 

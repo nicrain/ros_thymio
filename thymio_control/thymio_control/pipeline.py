@@ -118,6 +118,13 @@ def build_adapter(args: Any):
         from thymio_control.adapters.tcp_file import TcpFileAdapter
         return TcpFileAdapter(file_path)
 
+    if mode == "file":
+        file_path = getattr(args, "file_path", "")
+        if not file_path:
+            raise RuntimeError("file mode requires --file-path")
+        from thymio_control.adapters.edf_file import EdfFileAdapter
+        return EdfFileAdapter(file_path)
+
     if mode == "lsl":
         # Pre-computed feature stream (legacy LSL path)
         channel_map = _parse_channel_map(getattr(args, "lsl_channel_map", ""))
