@@ -160,12 +160,24 @@ def start_system(cfg: AppConfig, dry_run: bool = True) -> CommandResult:
 
 
 def stop_system(dry_run: bool = True) -> CommandResult:
-    cmd = "pkill -f 'ros2 launch thymio_control experiment_core.launch.py'"
     _stop_runtime_processes()
+    # Also kill any orphaned ROS/Gazebo processes
+    kill_cmds = [
+        "pkill -f 'ros2 launch thymio_control'",
+        "pkill -f 'eeg_control_node'",
+        "pkill -f 'gz sim'",
+        "pkill -f 'parameter_bridge'",
+        "pkill -f 'gazebo_camera_bridge'",
+    ]
+    for c in kill_cmds:
+        try:
+            subprocess.run(c.split(), timeout=3, capture_output=True)
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            pass
     set_runtime_state(False, None)
     return CommandResult(
         accepted=True,
         dry_run=dry_run,
-        command=cmd,
-        detail="Runtime state cleared in backend.",
+        command="; ".join(kill_cmds),
+        detail="ROS/Gazebo processes terminated.",
     )
