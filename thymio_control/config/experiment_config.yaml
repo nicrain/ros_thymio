@@ -20,6 +20,7 @@ adapter:
     right_alpha: 4
 policy_cfg:
   # Available: focus (β/(α+θ)), theta_beta (θ/β), alpha_only (α)
+  # Note: alpha_only calibration is placeholder — needs formal p5/p95校准
   policy: theta_beta
 output:
   udp_host: 127.0.0.1

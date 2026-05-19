@@ -661,6 +661,8 @@ class AlphaOnlyPolicy(Policy):
     alpha 抑制（alpha 降低）表示皮层激活和更高注意力，
     因此 alpha 越低 → 速度越快。EMA 平滑（α=0.35）。
     转向控制已禁用。
+
+    TODO: 校准值（offset=0.5, scale=7.0）为估算值，需正式校准。
     """
 
     def __init__(self) -> None:
