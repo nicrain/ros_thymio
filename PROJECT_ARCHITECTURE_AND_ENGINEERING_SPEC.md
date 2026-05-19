@@ -3,9 +3,9 @@
 ## 1. 文档信息
 - 文档名称: ROS Thymio 项目整体架构与工程化改进需求说明书
 - 项目: ROS2 Thymio EEG/Gaze/Web 控制平台
-- 版本: v2.4
+- 版本: v2.5
 - 日期: 2026-05-19
-- 状态: ThetaBetaPolicy 已校准 + 转向已禁用（只控制前后移动）
+- 状态: ThetaBetaPolicy 已校准 + AlphaOnlyPolicy 已添加（待校准）+ 转向已禁用
 - 适用对象:
   - 架构负责人、算法工程师、ROS 工程师、前后端工程师、测试工程师
   - AI Agent（代码改造、测试补齐、回归验证、文档维护）
@@ -244,7 +244,7 @@ class FileReader(Protocol):
 
 ## 7.4 算法参数与可配置性（v2.1 新增 / v2.4 更新）
 
-当前算法参数状态: DSP 参数使用学术标准默认值；**FocusPolicy 和 ThetaBetaPolicy 归一化参数均已基于 20260408111446_Patient01.edf 校准**。当前激活策略为 `theta_beta`（TBR）。所有参数必须可通过 YAML 配置覆盖。
+当前算法参数状态: DSP 参数使用学术标准默认值；**FocusPolicy 和 ThetaBetaPolicy 归一化参数均已基于 20260408111446_Patient01.edf 校准**；AlphaOnlyPolicy 参数为占位估算值（待正式校准）。当前激活策略为 `theta_beta`（TBR）。所有参数必须可通过 YAML 配置覆盖。
 
 ### 7.4.1 DSP 参数
 
@@ -344,6 +344,28 @@ TBR 越高表示专注度越低，因此速度意图与 TBR 成反比。
 # steer_intent = 0.5  # 移除此行并取消注释下面一行:
 steer_intent = clip01(0.5 + self.steer_gain * asym)
 ```
+
+### 7.4.6 AlphaOnlyPolicy 参数（v2.5 新增 — 待校准）
+
+AlphaOnlyPolicy 仅使用 `alpha` 频段功率控制速度。Alpha 抑制（alpha 降低）表示皮层激活和更高注意力，因此 alpha 越低 → 速度越快。
+
+归一化公式: `clip01(1.0 - (alpha_smooth - alpha_offset) / alpha_scale)`
+
+> ⚠️ **当前参数为占位估算值**，基于 `20260408111446_Patient01.edf` 中 alpha 功率范围（~0.5–7.5 µV²）目测估算，**尚未通过 p5/p95 统计进行正式校准**。使用前须参考 FocusPolicy/ThetaBetaPolicy 校准流程重新校准。
+
+| 参数 | 当前值（估算） | 单位 | 说明 |
+|------|--------------|------|------|
+| `alpha_offset` | 0.5 | µV² | alpha 的 p5（占位，待校准） |
+| `alpha_scale` | 7.0 | µV² | alpha 的 p95 - p5（占位，待校准） |
+| `ema_alpha` | 0.35 | — | EMA 平滑系数（同 FocusPolicy/ThetaBetaPolicy） |
+| `steer_intent` | 0.5（固定） | — | 转向已禁用 |
+
+TODO: 用 `test_tbr.py` 类似方式对 alpha 功率跑 p5/p95 统计，将结果替换上表中的占位值。
+
+受影响文件:
+- `thymio_control/policies/alpha_only.py` — 新架构 AlphaOnlyPolicy 类属性
+- `thymio_control/eeg_control_pipeline.py` — Legacy 路径（已注册至 POLICIES 字典）
+
 
 ## 7.5 数据清洗与滤波（v2.2 新增）
 
