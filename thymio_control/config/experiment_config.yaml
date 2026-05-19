@@ -1,5 +1,5 @@
 pipeline_config:
-  source_type: tcp_client
+  source_type: file
   eeg_device: enobio-20
   selected_channels:
   - 0

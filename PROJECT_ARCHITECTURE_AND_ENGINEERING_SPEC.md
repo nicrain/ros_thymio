@@ -3,9 +3,9 @@
 ## 1. 文档信息
 - 文档名称: ROS Thymio 项目整体架构与工程化改进需求说明书
 - 项目: ROS2 Thymio EEG/Gaze/Web 控制平台
-- 版本: v2.2
-- 日期: 2026-04-28
-- 状态: Analysis Complete / Awaiting Execution Confirmation
+- 版本: v2.3
+- 日期: 2026-05-19
+- 状态: FocusPolicy 已校准 + EMA 平滑已实现
 - 适用对象:
   - 架构负责人、算法工程师、ROS 工程师、前后端工程师、测试工程师
   - AI Agent（代码改造、测试补齐、回归验证、文档维护）
@@ -242,9 +242,11 @@ class FileReader(Protocol):
 | 是否有非 EDF 格式（如 XDF、CSV） | FileReader 接口可扩展，不影响已有代码 |
 | 不同设备的通道标签命名规范 | 通过 DeviceProfile 的 `channel_labels` 注入，处理层按索引访问 |
 
-## 7.4 算法参数与可配置性（v2.1 新增）
+## 7.4 算法参数与可配置性（v2.1 新增 / v2.3 更新）
 
-当前算法参数状态: 尚未调优，使用学术标准默认值。所有参数必须可通过 YAML 配置覆盖。
+当前算法参数状态: DSP 参数使用学术标准默认值；**FocusPolicy 归一化参数已基于 20260408111446_Patient01.edf 校准**。所有参数必须可通过 YAML 配置覆盖。
+
+### 7.4.1 DSP 参数
 
 | 参数 | 当前默认值 | 单位 | 说明 |
 |------|-----------|------|------|
@@ -262,6 +264,47 @@ class FileReader(Protocol):
 1. 所有参数保持当前默认值，但必须可通过 `experiment_config.yaml` 的 `dsp_config` 段覆盖。
 2. 实时与离线模式共用同一套参数，运行时可方便地修改 `window_sec` / `hop_sec`。
 3. 频段定义支持用户自定义扩展或部分覆盖标准频段（缺失频段自动回退到默认值）。
+
+### 7.4.2 FocusPolicy 参数（v2.3 新增 — 已校准）
+
+FocusPolicy 将 `beta_alpha_theta`（β/(α+θ)，专注度指数）映射为 `speed_intent` [0, 1]。
+归一化公式: `clip01((beta_alpha_theta - focus_offset) / focus_scale)`
+
+校准基准数据: `records/20260408111446_Patient01.edf`（Enobio-20, 20ch, 500Hz, 3 分钟窗口）
+
+| 参数 | 校准前（默认） | 校准后 | 说明 |
+|------|--------------|--------|------|
+| `focus_offset` | 0.15 | **0.323** | β/(α+θ) 的 p5 百分位 |
+| `focus_scale` | 0.85 | **2.0355** | β/(α+θ) 的 p95 - p5 |
+| `steer_gain` | 1.1 | 1.1（未改） | alpha_asym → steer 增益 |
+| `ema_alpha` | —（无） | **0.35** | EMA 平滑系数（见 §7.4.3） |
+
+数据集统计（3 分钟，360 帧，hop=0.5s）:
+- β/(α+θ): min=0.136, max=6.659, mean=1.089, std=0.685, median=0.966
+- p5=0.323, p25=0.604, p75=1.402, p95=2.359
+
+校准策略: 方案 1（p5~p95 映射到 [0, 1]），约 10% 的帧发生高端/低端饱和，中间 90% 有区分度。
+**注意**: 参数基于此特定 EDF 文件。换设备/换文件/换真人数据后必须重新校准。
+
+受影响文件:
+- `thymio_control/policies/focus.py` — 新架构 FocusPolicy 类属性
+- `thymio_control/eeg_control_pipeline.py` — Legacy 路径硬编码（ROS 节点实际导入）
+
+### 7.4.3 EMA 平滑（v2.3 新增）
+
+为减少帧间 speed_intent 抖动（原始 jitter ≈ 0.20），在 FocusPolicy 内部添加指数移动平均（EMA），作用于原始 `beta_alpha_theta` **归一化之前**（避免 clip 造成失真）。
+
+```
+bat_smooth[t] = α × bat_raw + (1 - α) × bat_smooth[t-1]
+speed_intent  = clip01((bat_smooth - focus_offset) / focus_scale)
+```
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| α (ema_alpha) | 0.35 | 平衡点：平滑度足够且不滞后 |
+| jitter 减少 | ~65% | 从 0.196 降至 ~0.07 |
+
+α 调节指南: 增大 → 响应更快，抖动更大；减小 → 更平滑，滞后更明显。当前 0.35 经 3 分钟数据验证为推荐默认值。
 
 ## 7.5 数据清洗与滤波（v2.2 新增）
 
@@ -648,6 +691,12 @@ thymio_control/thymio_control/
 ---
 
 ## 19. 变更日志
+
+### v2.3（2026-05-19）
+1. §7.4 更新为「算法参数与可配置性」，拆分 DSP 参数（§7.4.1）、FocusPolicy 参数（§7.4.2）、EMA 平滑（§7.4.3）。
+2. FocusPolicy 归一化参数已基于 `20260408111446_Patient01.edf` 3 分钟数据校准：`focus_offset=0.323`, `focus_scale=2.0355`（p5~p95 方案）。
+3. FocusPolicy 新增 EMA 平滑（α=0.35，作用于归一化前），jitter 从 0.196 降至 ~0.07（减少 65%）。
+4. 两处文件已更新：`thymio_control/policies/focus.py` 和 `thymio_control/eeg_control_pipeline.py`。
 
 ### v2.2（2026-04-28）
 1. 新增 §7.5 数据清洗与滤波需求，明确带通滤波、陷波滤波、伪迹去除等预处理步骤的优先级和默认参数。

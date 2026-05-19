@@ -600,12 +600,25 @@ class FocusPolicy(Policy):
     输出语义：
     - speed_intent 越大，前进意图越强
     - steer_intent < 0.5 偏左，> 0.5 偏右
+
+    EMA 平滑 beta_alpha_theta（α=0.35）减少帧间抖动。
     """
+
+    def __init__(self) -> None:
+        self._bat_smooth: float = 0.0
+        self._primed: bool = False
 
     def compute_intents(self, features: Dict[str, float]) -> Dict[str, float]:
         focus = features.get("beta_alpha_theta", 0.0)
-        # 比值范围因设备与采集设置而异，这里用可调的粗归一化。
-        focus_norm = clip01((focus - 0.15) / 0.85)
+
+        # EMA smoothing on raw beta_alpha_theta (before normalisation)
+        if not self._primed:
+            self._bat_smooth = focus
+            self._primed = True
+        else:
+            self._bat_smooth = 0.35 * focus + 0.65 * self._bat_smooth
+
+        focus_norm = clip01((self._bat_smooth - 0.323) / 2.0355)
 
         asym = features.get("alpha_asym", 0.0)
         steer_intent = clip01(0.5 + 1.1 * asym)
